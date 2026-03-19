@@ -86,6 +86,11 @@ var defaultValueMap = map[string]string{
 	"usageWarningThresholds":       "80,90,95",
 	"usageWarningExpiryThresholds": "7,3,1",
 
+	// Anti-spam defaults
+	"tgBotAntiSpamEnable":      "false",
+	"tgBotAntiSpamMaxMessages": "5",
+	"tgBotAntiSpamWindow":      "60",
+
 	// LDAP defaults
 	"ldapEnable":            "false",
 	"ldapHost":              "",
@@ -831,4 +836,16 @@ func (s *SettingService) GetUsageWarningThresholds() (string, error) {
 
 func (s *SettingService) GetUsageWarningExpiryThresholds() (string, error) {
 	return s.getString("usageWarningExpiryThresholds")
+}
+
+func (s *SettingService) GetTgBotAntiSpamEnable() (bool, error) {
+	return s.getBool("tgBotAntiSpamEnable")
+}
+
+func (s *SettingService) GetTgBotAntiSpamMaxMessages() (int, error) {
+	return s.getInt("tgBotAntiSpamMaxMessages")
+}
+
+func (s *SettingService) GetTgBotAntiSpamWindow() (int, error) {
+	return s.getInt("tgBotAntiSpamWindow")
 }

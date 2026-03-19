@@ -95,6 +95,49 @@ var (
 
 var userStates = make(map[int64]string)
 
+// antiSpamTracker tracks per-user message timestamps for rate limiting.
+type antiSpamTracker struct {
+	mu       sync.Mutex
+	messages map[int64][]time.Time // chatID -> list of message timestamps
+}
+
+var spamTracker = &antiSpamTracker{
+	messages: make(map[int64][]time.Time),
+}
+
+// isRateLimited checks if a user has exceeded the rate limit.
+// Returns true and seconds remaining if limited, false and 0 if allowed.
+func (a *antiSpamTracker) isRateLimited(chatID int64, maxMessages int, windowSecs int) (bool, int) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-time.Duration(windowSecs) * time.Second)
+
+	// Filter out old timestamps
+	var recent []time.Time
+	for _, t := range a.messages[chatID] {
+		if t.After(cutoff) {
+			recent = append(recent, t)
+		}
+	}
+
+	if len(recent) >= maxMessages {
+		// Calculate seconds until the oldest message in window expires
+		oldest := recent[0]
+		waitSecs := int(oldest.Add(time.Duration(windowSecs) * time.Second).Sub(now).Seconds()) + 1
+		if waitSecs < 1 {
+			waitSecs = 1
+		}
+		a.messages[chatID] = recent
+		return true, waitSecs
+	}
+
+	recent = append(recent, now)
+	a.messages[chatID] = recent
+	return false, 0
+}
+
 // LoginStatus represents the result of a login attempt.
 type LoginStatus byte
 
@@ -118,6 +161,30 @@ type Tgbot struct {
 // NewTgbot creates a new Tgbot instance.
 func (t *Tgbot) NewTgbot() *Tgbot {
 	return new(Tgbot)
+}
+
+// checkAntiSpam checks if a non-admin user is rate limited.
+// Returns true if the message should be blocked (user is spamming).
+func (t *Tgbot) checkAntiSpam(chatID int64, userID int64) bool {
+	if checkAdmin(userID) {
+		return false
+	}
+	enabled, err := t.settingService.GetTgBotAntiSpamEnable()
+	if err != nil || !enabled {
+		return false
+	}
+	maxMsgs, _ := t.settingService.GetTgBotAntiSpamMaxMessages()
+	window, _ := t.settingService.GetTgBotAntiSpamWindow()
+	if maxMsgs <= 0 || window <= 0 {
+		return false
+	}
+	limited, waitSecs := spamTracker.isRateLimited(chatID, maxMsgs, window)
+	if limited {
+		msg := t.I18nBot("tgbot.messages.antiSpamBlocked", "Seconds=="+strconv.Itoa(waitSecs))
+		t.SendMsgToTgbot(chatID, msg)
+		return true
+	}
+	return false
 }
 
 // I18nBot retrieves a localized message for the bot interface.
@@ -464,6 +531,9 @@ func (t *Tgbot) OnReceive() {
 		}, th.TextEqual(t.I18nBot("tgbot.buttons.closeKeyboard")))
 
 		h.HandleMessage(func(ctx *th.Context, message telego.Message) error {
+			if t.checkAntiSpam(message.Chat.ID, message.From.ID) {
+				return nil
+			}
 			// Use goroutine with worker pool for concurrent command processing
 			go func() {
 				messageWorkerPool <- struct{}{}        // Acquire worker
@@ -476,6 +546,9 @@ func (t *Tgbot) OnReceive() {
 		}, th.AnyCommand())
 
 		h.HandleCallbackQuery(func(ctx *th.Context, query telego.CallbackQuery) error {
+			if t.checkAntiSpam(query.Message.GetChat().ID, query.From.ID) {
+				return nil
+			}
 			// Use goroutine with worker pool for concurrent callback processing
 			go func() {
 				messageWorkerPool <- struct{}{}        // Acquire worker
@@ -488,6 +561,9 @@ func (t *Tgbot) OnReceive() {
 		}, th.AnyCallbackQueryWithMessage())
 
 		h.HandleMessage(func(ctx *th.Context, message telego.Message) error {
+			if t.checkAntiSpam(message.Chat.ID, message.From.ID) {
+				return nil
+			}
 			if userState, exists := userStates[message.Chat.ID]; exists {
 				switch userState {
 				case "awaiting_id":

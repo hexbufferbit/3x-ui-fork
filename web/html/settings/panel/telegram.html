@@ -88,6 +88,29 @@
             </template>
         </a-setting-list-item>
     </a-collapse-panel>
+    <a-collapse-panel key="5" header='{{ i18n "pages.settings.antiSpam" }}'>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.antiSpamEnable" }}</template>
+            <template #description>{{ i18n "pages.settings.antiSpamEnableDesc" }}</template>
+            <template #control>
+                <a-switch v-model="allSetting.tgBotAntiSpamEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.antiSpamMaxMessages" }}</template>
+            <template #description>{{ i18n "pages.settings.antiSpamMaxMessagesDesc" }}</template>
+            <template #control>
+                <a-input-number v-model="allSetting.tgBotAntiSpamMaxMessages" :min="1" :max="100"></a-input-number>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.antiSpamWindow" }}</template>
+            <template #description>{{ i18n "pages.settings.antiSpamWindowDesc" }}</template>
+            <template #control>
+                <a-input-number v-model="allSetting.tgBotAntiSpamWindow" :min="10" :max="3600"></a-input-number>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
     <a-collapse-panel key="3" header='{{ i18n "pages.settings.proxyAndServer" }}'>
         <a-setting-list-item paddings="small">
             <template #title>{{ i18n "pages.settings.telegramProxy"}}</template>

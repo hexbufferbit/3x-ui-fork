@@ -82,6 +82,11 @@ class AllSetting {
         this.usageWarningThresholds = "80,90,95";
         this.usageWarningExpiryThresholds = "7,3,1";
 
+        // Anti-spam settings
+        this.tgBotAntiSpamEnable = false;
+        this.tgBotAntiSpamMaxMessages = 5;
+        this.tgBotAntiSpamWindow = 60;
+
         if (data == null) {
             return
         }

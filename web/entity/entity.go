@@ -109,6 +109,11 @@ type AllSetting struct {
 	UsageWarningEnable           bool   `json:"usageWarningEnable" form:"usageWarningEnable"`
 	UsageWarningThresholds       string `json:"usageWarningThresholds" form:"usageWarningThresholds"`
 	UsageWarningExpiryThresholds string `json:"usageWarningExpiryThresholds" form:"usageWarningExpiryThresholds"`
+
+	// Anti-spam settings
+	TgBotAntiSpamEnable      bool `json:"tgBotAntiSpamEnable" form:"tgBotAntiSpamEnable"`
+	TgBotAntiSpamMaxMessages int  `json:"tgBotAntiSpamMaxMessages" form:"tgBotAntiSpamMaxMessages"`
+	TgBotAntiSpamWindow      int  `json:"tgBotAntiSpamWindow" form:"tgBotAntiSpamWindow"`
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.
