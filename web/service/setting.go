@@ -81,6 +81,11 @@ var defaultValueMap = map[string]string{
 	"externalTrafficInformURI":    "",
 	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
 
+	// Usage warning defaults
+	"usageWarningEnable":           "false",
+	"usageWarningThresholds":       "80,90,95",
+	"usageWarningExpiryThresholds": "7,3,1",
+
 	// LDAP defaults
 	"ldapEnable":            "false",
 	"ldapHost":              "",
@@ -814,4 +819,16 @@ func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 	}
 
 	return result, nil
+}
+
+func (s *SettingService) GetUsageWarningEnable() (bool, error) {
+	return s.getBool("usageWarningEnable")
+}
+
+func (s *SettingService) GetUsageWarningThresholds() (string, error) {
+	return s.getString("usageWarningThresholds")
+}
+
+func (s *SettingService) GetUsageWarningExpiryThresholds() (string, error) {
+	return s.getString("usageWarningExpiryThresholds")
 }

@@ -65,6 +65,29 @@
             </template>
         </a-setting-list-item>
     </a-collapse-panel>
+    <a-collapse-panel key="4" header='{{ i18n "pages.settings.usageWarnings" }}'>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.usageWarningEnable" }}</template>
+            <template #description>{{ i18n "pages.settings.usageWarningEnableDesc" }}</template>
+            <template #control>
+                <a-switch v-model="allSetting.usageWarningEnable"></a-switch>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.usageWarningThresholds" }}</template>
+            <template #description>{{ i18n "pages.settings.usageWarningThresholdsDesc" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.usageWarningThresholds" placeholder="80,90,95"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.usageWarningExpiryThresholds" }}</template>
+            <template #description>{{ i18n "pages.settings.usageWarningExpiryThresholdsDesc" }}</template>
+            <template #control>
+                <a-input type="text" v-model="allSetting.usageWarningExpiryThresholds" placeholder="7,3,1"></a-input>
+            </template>
+        </a-setting-list-item>
+    </a-collapse-panel>
     <a-collapse-panel key="3" header='{{ i18n "pages.settings.proxyAndServer" }}'>
         <a-setting-list-item paddings="small">
             <template #title>{{ i18n "pages.settings.telegramProxy"}}</template>

@@ -104,6 +104,15 @@ type Setting struct {
 	Value string `json:"value" form:"value"`
 }
 
+// UsageWarning tracks which usage threshold warnings have been sent per client to avoid duplicates.
+type UsageWarning struct {
+	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Email     string `json:"email" gorm:"index:idx_usage_warning,unique"`     // Client email
+	Threshold int    `json:"threshold" gorm:"index:idx_usage_warning,unique"` // Threshold percentage or days
+	Type      string `json:"type" gorm:"index:idx_usage_warning,unique"`      // "traffic" or "expiry"
+	SentAt    int64  `json:"sentAt"`                                          // Unix timestamp when sent
+}
+
 // Client represents a client configuration for Xray inbounds with traffic limits and settings.
 type Client struct {
 	ID         string `json:"id"`                           // Unique client identifier

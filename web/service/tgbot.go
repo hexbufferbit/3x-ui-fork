@@ -38,6 +38,7 @@ import (
 	"github.com/skip2/go-qrcode"
 	"github.com/valyala/fasthttp"
 	"github.com/valyala/fasthttp/fasthttpproxy"
+	"gorm.io/gorm"
 )
 
 var (
@@ -2642,6 +2643,7 @@ func (t *Tgbot) SendReport() {
 
 	t.sendExhaustedToAdmins()
 	t.notifyExhausted()
+	t.notifyUsageWarnings()
 
 	backupEnable, err := t.settingService.GetTgBotBackup()
 	if err == nil && backupEnable {
@@ -3588,6 +3590,148 @@ func int64Contains(slice []int64, item int64) bool {
 		}
 	}
 	return false
+}
+
+// notifyUsageWarnings checks client usage against configurable thresholds and sends
+// warnings to both clients (via TgID) and admins when thresholds are crossed.
+func (t *Tgbot) notifyUsageWarnings() {
+	enabled, err := t.settingService.GetUsageWarningEnable()
+	if err != nil || !enabled {
+		return
+	}
+
+	trafficThresholdsStr, _ := t.settingService.GetUsageWarningThresholds()
+	expiryThresholdsStr, _ := t.settingService.GetUsageWarningExpiryThresholds()
+
+	trafficThresholds := parseThresholds(trafficThresholdsStr)
+	expiryThresholds := parseThresholds(expiryThresholdsStr)
+
+	if len(trafficThresholds) == 0 && len(expiryThresholds) == 0 {
+		return
+	}
+
+	now := time.Now().Unix() * 1000
+
+	inbounds, err := t.inboundService.GetAllInbounds()
+	if err != nil {
+		logger.Warning("Usage warning: unable to load inbounds", err)
+		return
+	}
+
+	db := database.GetDB()
+	var adminMsg strings.Builder
+
+	for _, inbound := range inbounds {
+		if !inbound.Enable || len(inbound.ClientStats) == 0 {
+			continue
+		}
+		clients, err := t.inboundService.GetClients(inbound)
+		if err != nil {
+			continue
+		}
+		clientMap := make(map[string]model.Client, len(clients))
+		for _, c := range clients {
+			clientMap[strings.ToLower(c.Email)] = c
+		}
+
+		for _, traffic := range inbound.ClientStats {
+			if !traffic.Enable {
+				continue
+			}
+
+			client, ok := clientMap[strings.ToLower(traffic.Email)]
+			if !ok {
+				continue
+			}
+
+			// Check traffic thresholds
+			if traffic.Total > 0 && len(trafficThresholds) > 0 {
+				used := traffic.Up + traffic.Down
+				usagePercent := int(float64(used) / float64(traffic.Total) * 100)
+				for _, threshold := range trafficThresholds {
+					if usagePercent >= threshold {
+						if !warningAlreadySent(db, traffic.Email, threshold, "traffic") {
+							saveWarning(db, traffic.Email, threshold, "traffic")
+							msg := t.I18nBot("tgbot.messages.usageWarningTraffic",
+								"Email=="+traffic.Email,
+								"Percent=="+strconv.Itoa(threshold),
+								"Used=="+common.FormatTraffic(used),
+								"Total=="+common.FormatTraffic(traffic.Total),
+							)
+							if client.TgID != 0 {
+								t.SendMsgToTgbot(client.TgID, msg)
+							}
+							adminMsg.WriteString(msg)
+							adminMsg.WriteString("\r\n")
+						}
+					}
+				}
+			}
+
+			// Check expiry thresholds (in days)
+			if traffic.ExpiryTime > 0 && len(expiryThresholds) > 0 {
+				daysLeft := int((traffic.ExpiryTime - now) / 86400000)
+				if daysLeft < 0 {
+					daysLeft = 0
+				}
+				for _, threshold := range expiryThresholds {
+					if daysLeft <= threshold {
+						if !warningAlreadySent(db, traffic.Email, threshold, "expiry") {
+							saveWarning(db, traffic.Email, threshold, "expiry")
+							msg := t.I18nBot("tgbot.messages.usageWarningExpiry",
+								"Email=="+traffic.Email,
+								"Days=="+strconv.Itoa(daysLeft),
+								"Threshold=="+strconv.Itoa(threshold),
+								"ExpiryDate=="+time.Unix(traffic.ExpiryTime/1000, 0).Format("2006-01-02 15:04:05"),
+							)
+							if client.TgID != 0 {
+								t.SendMsgToTgbot(client.TgID, msg)
+							}
+							adminMsg.WriteString(msg)
+							adminMsg.WriteString("\r\n")
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Send aggregated admin notification
+	if adminMsg.Len() > 0 {
+		header := t.I18nBot("tgbot.messages.usageWarningAdmin")
+		t.SendMsgToTgbotAdmins(header + adminMsg.String())
+	}
+}
+
+// parseThresholds parses a comma-separated string of integers into a sorted slice.
+func parseThresholds(s string) []int {
+	var result []int
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if v, err := strconv.Atoi(part); err == nil && v > 0 {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// warningAlreadySent checks if a warning for a specific threshold has already been sent.
+func warningAlreadySent(db *gorm.DB, email string, threshold int, warnType string) bool {
+	var count int64
+	db.Model(&model.UsageWarning{}).
+		Where("email = ? AND threshold = ? AND type = ?", email, threshold, warnType).
+		Count(&count)
+	return count > 0
+}
+
+// saveWarning records that a warning has been sent.
+func saveWarning(db *gorm.DB, email string, threshold int, warnType string) {
+	db.Create(&model.UsageWarning{
+		Email:     email,
+		Threshold: threshold,
+		Type:      warnType,
+		SentAt:    time.Now().Unix(),
+	})
 }
 
 // onlineClients retrieves and sends information about online clients.

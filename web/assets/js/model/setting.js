@@ -77,6 +77,11 @@ class AllSetting {
         this.ldapDefaultExpiryDays = 0;
         this.ldapDefaultLimitIP = 0;
 
+        // Usage warning settings
+        this.usageWarningEnable = false;
+        this.usageWarningThresholds = "80,90,95";
+        this.usageWarningExpiryThresholds = "7,3,1";
+
         if (data == null) {
             return
         }

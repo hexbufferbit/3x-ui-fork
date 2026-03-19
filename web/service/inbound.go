@@ -1855,6 +1855,10 @@ func (s *InboundService) ResetAllClientTraffics(id int) error {
 			whereText += " = ?"
 		}
 
+		// Get affected client emails before reset
+		var emails []string
+		tx.Model(xray.ClientTraffic{}).Where(whereText, id).Pluck("email", &emails)
+
 		// Reset client traffics
 		result := tx.Model(xray.ClientTraffic{}).
 			Where(whereText, id).
@@ -1862,6 +1866,11 @@ func (s *InboundService) ResetAllClientTraffics(id int) error {
 
 		if result.Error != nil {
 			return result.Error
+		}
+
+		// Clear traffic usage warnings for reset clients
+		if len(emails) > 0 {
+			tx.Where("email IN ? AND type = ?", emails, "traffic").Delete(&model.UsageWarning{})
 		}
 
 		// Update lastTrafficResetTime for the inbound(s)

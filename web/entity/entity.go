@@ -104,6 +104,11 @@ type AllSetting struct {
 	LdapDefaultExpiryDays int    `json:"ldapDefaultExpiryDays" form:"ldapDefaultExpiryDays"`
 	LdapDefaultLimitIP    int    `json:"ldapDefaultLimitIP" form:"ldapDefaultLimitIP"`
 	// JSON subscription routing rules
+
+	// Usage warning settings
+	UsageWarningEnable           bool   `json:"usageWarningEnable" form:"usageWarningEnable"`
+	UsageWarningThresholds       string `json:"usageWarningThresholds" form:"usageWarningThresholds"`
+	UsageWarningExpiryThresholds string `json:"usageWarningExpiryThresholds" form:"usageWarningExpiryThresholds"`
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.
