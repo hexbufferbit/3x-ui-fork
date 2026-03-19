@@ -125,7 +125,7 @@ func (a *antiSpamTracker) isRateLimited(chatID int64, maxMessages int, windowSec
 	if len(recent) >= maxMessages {
 		// Calculate seconds until the oldest message in window expires
 		oldest := recent[0]
-		waitSecs := int(oldest.Add(time.Duration(windowSecs) * time.Second).Sub(now).Seconds()) + 1
+		waitSecs := int(oldest.Add(time.Duration(windowSecs)*time.Second).Sub(now).Seconds()) + 1
 		if waitSecs < 1 {
 			waitSecs = 1
 		}
