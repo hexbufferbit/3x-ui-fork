@@ -40,6 +40,7 @@ type AllSetting struct {
 	TgBotEnable      bool   `json:"tgBotEnable" form:"tgBotEnable"`           // Enable Telegram bot notifications
 	TgBotToken       string `json:"tgBotToken" form:"tgBotToken"`             // Telegram bot token
 	TgBotProxy       string `json:"tgBotProxy" form:"tgBotProxy"`             // Proxy URL for Telegram bot
+	TgBotGateway     string `json:"tgBotGateway" form:"tgBotGateway"`         // Local IP to bind outgoing bot connections
 	TgBotAPIServer   string `json:"tgBotAPIServer" form:"tgBotAPIServer"`     // Custom API server for Telegram bot
 	TgBotChatId      string `json:"tgBotChatId" form:"tgBotChatId"`           // Telegram chat ID for notifications
 	TgRunTime        string `json:"tgRunTime" form:"tgRunTime"`               // Cron schedule for Telegram notifications

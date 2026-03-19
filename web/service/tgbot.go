@@ -310,8 +310,14 @@ func (t *Tgbot) Start(i18nFS embed.FS) error {
 		logger.Warning("Failed to get Telegram bot API server URL:", err)
 	}
 
+	// Get Telegram bot gateway IP
+	tgBotGateway, err := t.settingService.GetTgBotGateway()
+	if err != nil {
+		logger.Warning("Failed to get Telegram bot gateway IP:", err)
+	}
+
 	// Create new Telegram bot instance
-	bot, err = t.NewBot(tgBotToken, tgBotProxy, tgBotAPIServer)
+	bot, err = t.NewBot(tgBotToken, tgBotProxy, tgBotAPIServer, tgBotGateway)
 	if err != nil {
 		logger.Error("Failed to initialize Telegram bot API:", err)
 		return err
@@ -343,7 +349,7 @@ func (t *Tgbot) Start(i18nFS embed.FS) error {
 }
 
 // createRobustFastHTTPClient creates a fasthttp.Client with proper connection handling
-func (t *Tgbot) createRobustFastHTTPClient(proxyUrl string) *fasthttp.Client {
+func (t *Tgbot) createRobustFastHTTPClient(proxyUrl string, gatewayIP string) *fasthttp.Client {
 	client := &fasthttp.Client{
 		// Connection timeouts
 		ReadTimeout:                   30 * time.Second,
@@ -367,13 +373,24 @@ func (t *Tgbot) createRobustFastHTTPClient(proxyUrl string) *fasthttp.Client {
 	// Set proxy if provided
 	if proxyUrl != "" {
 		client.Dial = fasthttpproxy.FasthttpSocksDialer(proxyUrl)
+	} else if gatewayIP != "" {
+		// Bind outgoing connections to a specific local IP address
+		localAddr := &net.TCPAddr{IP: net.ParseIP(gatewayIP)}
+		client.Dial = func(addr string) (net.Conn, error) {
+			dialer := &net.Dialer{
+				Timeout:   30 * time.Second,
+				LocalAddr: localAddr,
+			}
+			return dialer.Dial("tcp", addr)
+		}
+		logger.Infof("Telegram bot binding to local IP: %s", gatewayIP)
 	}
 
 	return client
 }
 
 // NewBot creates a new Telegram bot instance with optional proxy and API server settings.
-func (t *Tgbot) NewBot(token string, proxyUrl string, apiServerUrl string) (*telego.Bot, error) {
+func (t *Tgbot) NewBot(token string, proxyUrl string, apiServerUrl string, gatewayIP string) (*telego.Bot, error) {
 	// Validate proxy URL if provided
 	if proxyUrl != "" {
 		if !strings.HasPrefix(proxyUrl, "socks5://") {
@@ -403,7 +420,7 @@ func (t *Tgbot) NewBot(token string, proxyUrl string, apiServerUrl string) (*tel
 	}
 
 	// Create robust fasthttp client
-	client := t.createRobustFastHTTPClient(proxyUrl)
+	client := t.createRobustFastHTTPClient(proxyUrl, gatewayIP)
 
 	// Build bot options
 	var options []telego.BotOption

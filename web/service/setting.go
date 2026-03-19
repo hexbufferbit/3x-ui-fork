@@ -42,6 +42,7 @@ var defaultValueMap = map[string]string{
 	"tgBotEnable":                 "false",
 	"tgBotToken":                  "",
 	"tgBotProxy":                  "",
+	"tgBotGateway":                "",
 	"tgBotAPIServer":              "",
 	"tgBotChatId":                 "",
 	"tgRunTime":                   "@daily",
@@ -848,4 +849,8 @@ func (s *SettingService) GetTgBotAntiSpamMaxMessages() (int, error) {
 
 func (s *SettingService) GetTgBotAntiSpamWindow() (int, error) {
 	return s.getInt("tgBotAntiSpamWindow")
+}
+
+func (s *SettingService) GetTgBotGateway() (string, error) {
+	return s.getString("tgBotGateway")
 }

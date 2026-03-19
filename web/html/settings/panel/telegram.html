@@ -121,6 +121,14 @@
             </template>
         </a-setting-list-item>
         <a-setting-list-item paddings="small">
+            <template #title>{{ i18n "pages.settings.telegramGateway"}}</template>
+            <template #description>{{ i18n "pages.settings.telegramGatewayDesc"}}</template>
+            <template #control>
+                <a-input type="text" placeholder="192.168.1.100"
+                    v-model="allSetting.tgBotGateway"></a-input>
+            </template>
+        </a-setting-list-item>
+        <a-setting-list-item paddings="small">
             <template #title>{{ i18n "pages.settings.telegramAPIServer"}}</template>
             <template #description>{{ i18n "pages.settings.telegramAPIServerDesc"}}</template>
             <template #control>
