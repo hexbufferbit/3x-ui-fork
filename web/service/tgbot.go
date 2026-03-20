@@ -17,6 +17,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -3737,53 +3738,76 @@ func (t *Tgbot) CheckUsageWarnings() {
 				continue
 			}
 
-			// Check traffic thresholds
+			// Check traffic thresholds — only notify for the highest crossed threshold
 			if traffic.Total > 0 && len(trafficThresholds) > 0 {
 				used := traffic.Up + traffic.Down
 				usagePercent := int(float64(used) / float64(traffic.Total) * 100)
+				highestUnsent := -1
+				// trafficThresholds is sorted ascending, find highest crossed & unsent
 				for _, threshold := range trafficThresholds {
 					if usagePercent >= threshold {
 						if !warningAlreadySent(db, traffic.Email, threshold, "traffic") {
-							saveWarning(db, traffic.Email, threshold, "traffic")
-							msg := t.I18nBot("tgbot.messages.usageWarningTraffic",
-								"Email=="+traffic.Email,
-								"Percent=="+strconv.Itoa(threshold),
-								"Used=="+common.FormatTraffic(used),
-								"Total=="+common.FormatTraffic(traffic.Total),
-							)
-							if client.TgID != 0 {
-								t.SendMsgToTgbot(client.TgID, msg)
-							}
-							adminMsg.WriteString(msg)
-							adminMsg.WriteString("\r\n")
+							highestUnsent = threshold
 						}
 					}
 				}
+				if highestUnsent > 0 {
+					// Mark all crossed thresholds as sent, only notify for highest
+					for _, threshold := range trafficThresholds {
+						if usagePercent >= threshold {
+							saveWarning(db, traffic.Email, threshold, "traffic")
+						}
+					}
+					msg := t.I18nBot("tgbot.messages.usageWarningTraffic",
+						"Email=="+traffic.Email,
+						"Percent=="+strconv.Itoa(highestUnsent),
+						"Used=="+common.FormatTraffic(used),
+						"Total=="+common.FormatTraffic(traffic.Total),
+					)
+					if client.TgID != 0 {
+						t.SendMsgToTgbot(client.TgID, msg)
+					}
+					adminMsg.WriteString(msg)
+					adminMsg.WriteString("\r\n")
+				}
 			}
 
-			// Check expiry thresholds (in days)
+			// Check expiry thresholds (in days) — only notify for the most urgent
 			if traffic.ExpiryTime > 0 && len(expiryThresholds) > 0 {
 				daysLeft := int((traffic.ExpiryTime - now) / 86400000)
 				if daysLeft < 0 {
 					daysLeft = 0
 				}
+				// expiryThresholds sorted ascending (e.g. 1,3,7)
+				// "most urgent" = smallest threshold that still matches (daysLeft <= threshold)
+				mostUrgentUnsent := -1
 				for _, threshold := range expiryThresholds {
 					if daysLeft <= threshold {
 						if !warningAlreadySent(db, traffic.Email, threshold, "expiry") {
-							saveWarning(db, traffic.Email, threshold, "expiry")
-							msg := t.I18nBot("tgbot.messages.usageWarningExpiry",
-								"Email=="+traffic.Email,
-								"Days=="+strconv.Itoa(daysLeft),
-								"Threshold=="+strconv.Itoa(threshold),
-								"ExpiryDate=="+time.Unix(traffic.ExpiryTime/1000, 0).Format("2006-01-02 15:04:05"),
-							)
-							if client.TgID != 0 {
-								t.SendMsgToTgbot(client.TgID, msg)
+							if mostUrgentUnsent < 0 || threshold < mostUrgentUnsent {
+								mostUrgentUnsent = threshold
 							}
-							adminMsg.WriteString(msg)
-							adminMsg.WriteString("\r\n")
 						}
 					}
+				}
+				if mostUrgentUnsent > 0 {
+					// Mark all crossed thresholds as sent, only notify for most urgent
+					for _, threshold := range expiryThresholds {
+						if daysLeft <= threshold {
+							saveWarning(db, traffic.Email, threshold, "expiry")
+						}
+					}
+					msg := t.I18nBot("tgbot.messages.usageWarningExpiry",
+						"Email=="+traffic.Email,
+						"Days=="+strconv.Itoa(daysLeft),
+						"Threshold=="+strconv.Itoa(mostUrgentUnsent),
+						"ExpiryDate=="+time.Unix(traffic.ExpiryTime/1000, 0).Format("2006-01-02 15:04:05"),
+					)
+					if client.TgID != 0 {
+						t.SendMsgToTgbot(client.TgID, msg)
+					}
+					adminMsg.WriteString(msg)
+					adminMsg.WriteString("\r\n")
 				}
 			}
 		}
@@ -3796,7 +3820,7 @@ func (t *Tgbot) CheckUsageWarnings() {
 	}
 }
 
-// parseThresholds parses a comma-separated string of integers into a sorted slice.
+// parseThresholds parses a comma-separated string of integers into a sorted slice (ascending).
 func parseThresholds(s string) []int {
 	var result []int
 	for _, part := range strings.Split(s, ",") {
@@ -3805,6 +3829,7 @@ func parseThresholds(s string) []int {
 			result = append(result, v)
 		}
 	}
+	sort.Ints(result)
 	return result
 }
 
@@ -3817,8 +3842,11 @@ func warningAlreadySent(db *gorm.DB, email string, threshold int, warnType strin
 	return count > 0
 }
 
-// saveWarning records that a warning has been sent.
+// saveWarning records that a warning has been sent (skips if already exists).
 func saveWarning(db *gorm.DB, email string, threshold int, warnType string) {
+	if warningAlreadySent(db, email, threshold, warnType) {
+		return
+	}
 	db.Create(&model.UsageWarning{
 		Email:     email,
 		Threshold: threshold,
