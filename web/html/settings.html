@@ -610,11 +610,17 @@
           panelPath = window.location.pathname.split('/').length < 4
           if (panelPath && this.allSetting.webBasePath == '/') alerts.push('{{ i18n "secAlertPanelURI" }}');
           if (this.allSetting.subEnable) {
-            subPath = this.allSetting.subURI.length > 0 ? new URL(this.allSetting.subURI).pathname : this.allSetting.subPath;
+            subPath = this.allSetting.subPath;
+            if (this.allSetting.subURI.length > 0) {
+              try { subPath = new URL(this.allSetting.subURI).pathname; } catch(e) {}
+            }
             if (subPath == '/sub/') alerts.push('{{ i18n "secAlertSubURI" }}');
           }
           if (this.allSetting.subJsonEnable) {
-            subJsonPath = this.allSetting.subJsonURI.length > 0 ? new URL(this.allSetting.subJsonURI).pathname : this.allSetting.subJsonPath;
+            subJsonPath = this.allSetting.subJsonPath;
+            if (this.allSetting.subJsonURI.length > 0) {
+              try { subJsonPath = new URL(this.allSetting.subJsonURI).pathname; } catch(e) {}
+            }
             if (subJsonPath == '/json/') alerts.push('{{ i18n "secAlertSubJsonURI" }}');
           }
           return alerts
