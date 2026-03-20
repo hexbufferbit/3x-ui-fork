@@ -359,6 +359,9 @@ func (s *Server) startTask() {
 			return
 		}
 
+		// Check usage warnings every 10 seconds
+		s.cron.AddJob("@every 10s", job.NewCheckUsageWarningJob())
+
 		// check for Telegram bot callback query hash storage reset
 		s.cron.AddJob("@every 2m", job.NewCheckHashStorageJob())
 

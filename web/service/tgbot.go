@@ -2736,7 +2736,6 @@ func (t *Tgbot) SendReport() {
 
 	t.sendExhaustedToAdmins()
 	t.notifyExhausted()
-	t.notifyUsageWarnings()
 
 	backupEnable, err := t.settingService.GetTgBotBackup()
 	if err == nil && backupEnable {
@@ -3685,9 +3684,10 @@ func int64Contains(slice []int64, item int64) bool {
 	return false
 }
 
-// notifyUsageWarnings checks client usage against configurable thresholds and sends
+// CheckUsageWarnings checks client usage against configurable thresholds and sends
 // warnings to both clients (via TgID) and admins when thresholds are crossed.
-func (t *Tgbot) notifyUsageWarnings() {
+// Called periodically (every 10s) by CheckUsageWarningJob.
+func (t *Tgbot) CheckUsageWarnings() {
 	enabled, err := t.settingService.GetUsageWarningEnable()
 	if err != nil || !enabled {
 		return
