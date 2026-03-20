@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/rand"
+	tls2 "crypto/tls"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
@@ -2534,15 +2535,42 @@ func (t *Tgbot) sendClientSubLinks(chatId int64, email string) {
 
 // sendClientIndividualLinks fetches the subscription content (individual links) and sends it to the user
 func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
-	// Build the HTML sub page URL; we'll call it with header Accept to get raw content
-	subURL, _, err := t.buildSubscriptionURLs(email)
-	if err != nil {
-		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
+	// Build a local URL to fetch configs directly from the sub server,
+	// bypassing the reverse proxy URI which may not be reachable from the server itself.
+	traffic, client, err := t.inboundService.GetClientByEmail(email)
+	_ = traffic
+	if err != nil || client == nil {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\nclient not found")
 		return
 	}
 
+	subPort, _ := t.settingService.GetSubPort()
+	subPath, _ := t.settingService.GetSubPath()
+	subListen, _ := t.settingService.GetSubListen()
+	subKeyFile, _ := t.settingService.GetSubKeyFile()
+	subCertFile, _ := t.settingService.GetSubCertFile()
+
+	if !strings.HasPrefix(subPath, "/") {
+		subPath = "/" + subPath
+	}
+	if !strings.HasSuffix(subPath, "/") {
+		subPath = subPath + "/"
+	}
+
+	listenAddr := subListen
+	if listenAddr == "" || listenAddr == "0.0.0.0" || listenAddr == "::" {
+		listenAddr = "127.0.0.1"
+	}
+	scheme := "http"
+	tls := subKeyFile != "" && subCertFile != ""
+	if tls {
+		scheme = "https"
+	}
+
+	localURL := fmt.Sprintf("%s://%s:%d%s%s", scheme, listenAddr, subPort, subPath, client.SubID)
+
 	// Try to fetch raw subscription links. Prefer plain text response.
-	req, err := http.NewRequest("GET", subURL, nil)
+	req, err := http.NewRequest("GET", localURL, nil)
 	if err != nil {
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
 		return
@@ -2550,12 +2578,22 @@ func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
 	// Force plain text to avoid HTML page; controller respects Accept header
 	req.Header.Set("Accept", "text/plain, */*;q=0.1")
 
-	// Use optimized client with connection pooling
+	// Use a local HTTP client; skip TLS verify since the cert won't match 127.0.0.1
+	localClient := optimizedHTTPClient
+	if tls {
+		localClient = &http.Client{
+			Timeout: 10 * time.Second,
+			Transport: &http.Transport{
+				TLSClientConfig: &tls2.Config{InsecureSkipVerify: true},
+			},
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	req = req.WithContext(ctx)
 
-	resp, err := optimizedHTTPClient.Do(req)
+	resp, err := localClient.Do(req)
 	if err != nil {
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
 		return
@@ -2658,49 +2696,82 @@ func (t *Tgbot) sendClientQRLinks(chatId int64, email string) {
 	}
 
 	// Also generate a few individual links' QRs (first up to 5)
-	subPageURL := subURL
-	req, err := http.NewRequest("GET", subPageURL, nil)
-	if err == nil {
-		req.Header.Set("Accept", "text/plain, */*;q=0.1")
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		req = req.WithContext(ctx)
-		if resp, err := optimizedHTTPClient.Do(req); err == nil {
-			body, _ := io.ReadAll(resp.Body)
-			_ = resp.Body.Close()
-			encoded, _ := t.settingService.GetSubEncrypt()
-			var content string
-			if encoded {
-				if dec, err := base64.StdEncoding.DecodeString(string(body)); err == nil {
-					content = string(dec)
+	// Fetch from local sub server directly, bypassing reverse proxy URI
+	subPort, _ := t.settingService.GetSubPort()
+	subPath, _ := t.settingService.GetSubPath()
+	subListen, _ := t.settingService.GetSubListen()
+	subKeyFile, _ := t.settingService.GetSubKeyFile()
+	subCertFile, _ := t.settingService.GetSubCertFile()
+	if !strings.HasPrefix(subPath, "/") {
+		subPath = "/" + subPath
+	}
+	if !strings.HasSuffix(subPath, "/") {
+		subPath = subPath + "/"
+	}
+	listenAddr := subListen
+	if listenAddr == "" || listenAddr == "0.0.0.0" || listenAddr == "::" {
+		listenAddr = "127.0.0.1"
+	}
+	qrScheme := "http"
+	qrTLS := subKeyFile != "" && subCertFile != ""
+	if qrTLS {
+		qrScheme = "https"
+	}
+	_, qrClient, _ := t.inboundService.GetClientByEmail(email)
+	if qrClient != nil {
+		localQRURL := fmt.Sprintf("%s://%s:%d%s%s", qrScheme, listenAddr, subPort, subPath, qrClient.SubID)
+		req, err := http.NewRequest("GET", localQRURL, nil)
+		if err == nil {
+			req.Header.Set("Accept", "text/plain, */*;q=0.1")
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			req = req.WithContext(ctx)
+			qrHTTPClient := optimizedHTTPClient
+			if qrTLS {
+				qrHTTPClient = &http.Client{
+					Timeout: 10 * time.Second,
+					Transport: &http.Transport{
+						TLSClientConfig: &tls2.Config{InsecureSkipVerify: true},
+					},
+				}
+			}
+			if resp, err := qrHTTPClient.Do(req); err == nil {
+				body, _ := io.ReadAll(resp.Body)
+				_ = resp.Body.Close()
+				encoded, _ := t.settingService.GetSubEncrypt()
+				var content string
+				if encoded {
+					if dec, err := base64.StdEncoding.DecodeString(string(body)); err == nil {
+						content = string(dec)
+					} else {
+						content = string(body)
+					}
 				} else {
 					content = string(body)
 				}
-			} else {
-				content = string(body)
-			}
-			lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
-			var cleaned []string
-			for _, l := range lines {
-				l = strings.TrimSpace(l)
-				if l != "" {
-					cleaned = append(cleaned, l)
+				lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
+				var cleaned []string
+				for _, l := range lines {
+					l = strings.TrimSpace(l)
+					if l != "" {
+						cleaned = append(cleaned, l)
+					}
 				}
-			}
-			if len(cleaned) > 0 {
-				max := min(len(cleaned), 5)
-				for i := range max {
-					if png, err := createQR(cleaned[i], 320); err == nil {
-						// Use the email as filename for individual link QR
-						filename := email + ".png"
-						document := tu.Document(
-							tu.ID(chatId),
-							tu.FileFromBytes(png, filename),
-						)
-						_, _ = bot.SendDocument(context.Background(), document)
-						// Reduced delay for better performance
-						if i < max-1 { // Only delay between documents, not after the last one
-							time.Sleep(50 * time.Millisecond)
+				if len(cleaned) > 0 {
+					max := min(len(cleaned), 5)
+					for i := range max {
+						if png, err := createQR(cleaned[i], 320); err == nil {
+							// Use the email as filename for individual link QR
+							filename := email + ".png"
+							document := tu.Document(
+								tu.ID(chatId),
+								tu.FileFromBytes(png, filename),
+							)
+							_, _ = bot.SendDocument(context.Background(), document)
+							// Reduced delay for better performance
+							if i < max-1 { // Only delay between documents, not after the last one
+								time.Sleep(50 * time.Millisecond)
+							}
 						}
 					}
 				}
