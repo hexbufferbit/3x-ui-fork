@@ -51,6 +51,15 @@ type ipWhoIsResponse struct {
 	} `json:"timezone"`
 }
 
+type ipInfoIOResponse struct {
+	IP       string `json:"ip"`
+	City     string `json:"city"`
+	Region   string `json:"region"`
+	Country  string `json:"country"`
+	Org      string `json:"org"`
+	Timezone string `json:"timezone"`
+}
+
 var (
 	ipInfoCache   = map[string]cachedClientIPInfo{}
 	ipInfoCacheMu sync.RWMutex
@@ -118,13 +127,17 @@ func (s *StatisticsService) GetIPInfo(ip string) ClientIPInfo {
 		if message == "" {
 			message = "IP information unavailable"
 		}
+		info, fallbackErr := lookupIPInfoWithIPInfo(ip)
+		if fallbackErr == nil {
+			return cacheIPInfo(ip, info, ipInfoCacheTTL)
+		}
 		return cacheIPInfo(ip, ClientIPInfo{
 			IP:      ip,
 			Message: message,
 		}, ipInfoFailureTTL)
 	}
 
-	return cacheIPInfo(ip, ClientIPInfo{
+	info := ClientIPInfo{
 		IP:           payload.IP,
 		ISP:          payload.Connection.ISP,
 		Organization: payload.Connection.Org,
@@ -132,7 +145,22 @@ func (s *StatisticsService) GetIPInfo(ip string) ClientIPInfo {
 		Region:       payload.Region,
 		Country:      payload.Country,
 		Timezone:     payload.Timezone.ID,
-	}, ipInfoCacheTTL)
+	}
+	if info.IP == "" {
+		info.IP = ip
+	}
+	if info.ISP == "" || info.Organization == "" || info.City == "" || info.Region == "" || info.Country == "" || info.Timezone == "" {
+		fillIPInfoFromFallback(&info, ip)
+	}
+
+	if info.ISP == "" && info.Organization != "" {
+		info.ISP = info.Organization
+	}
+	if info.Organization == "" && info.ISP != "" {
+		info.Organization = info.ISP
+	}
+
+	return cacheIPInfo(ip, info, ipInfoCacheTTL)
 }
 
 func getCachedIPInfo(ip string) (ClientIPInfo, bool) {
@@ -166,4 +194,66 @@ func shouldLookupPublicIP(addr netip.Addr) bool {
 		return false
 	}
 	return true
+}
+
+func fillIPInfoFromFallback(info *ClientIPInfo, ip string) {
+	fallback, err := lookupIPInfoWithIPInfo(ip)
+	if err != nil {
+		return
+	}
+
+	if info.IP == "" {
+		info.IP = fallback.IP
+	}
+	if info.ISP == "" {
+		info.ISP = fallback.ISP
+	}
+	if info.Organization == "" {
+		info.Organization = fallback.Organization
+	}
+	if info.City == "" {
+		info.City = fallback.City
+	}
+	if info.Region == "" {
+		info.Region = fallback.Region
+	}
+	if info.Country == "" {
+		info.Country = fallback.Country
+	}
+	if info.Timezone == "" {
+		info.Timezone = fallback.Timezone
+	}
+}
+
+func lookupIPInfoWithIPInfo(ip string) (ClientIPInfo, error) {
+	lookupURL := "https://ipinfo.io/" + url.PathEscape(ip) + "/json"
+	req, err := http.NewRequest(http.MethodGet, lookupURL, nil)
+	if err != nil {
+		return ClientIPInfo{}, err
+	}
+
+	resp, err := ipHTTPClient.Do(req)
+	if err != nil {
+		return ClientIPInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ClientIPInfo{}, fmt.Errorf("ipinfo status %d", resp.StatusCode)
+	}
+
+	var payload ipInfoIOResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return ClientIPInfo{}, err
+	}
+
+	return ClientIPInfo{
+		IP:           payload.IP,
+		ISP:          payload.Org,
+		Organization: payload.Org,
+		City:         payload.City,
+		Region:       payload.Region,
+		Country:      payload.Country,
+		Timezone:     payload.Timezone,
+	}, nil
 }

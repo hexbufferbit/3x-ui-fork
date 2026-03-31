@@ -94,7 +94,10 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 
 	// Build client IP map
 	var clientIps []model.InboundClientIps
-	db.Find(&clientIps)
+	err = db.Find(&clientIps).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
 	now := time.Now()
 	ipMap := make(map[string][]ClientIPResult, len(clientIps))
 	for _, cip := range clientIps {

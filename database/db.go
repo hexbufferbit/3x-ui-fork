@@ -145,6 +145,10 @@ func InitDB(dbPath string) error {
 		return err
 	}
 
+	if err := configureSQLiteConnection(db); err != nil {
+		return err
+	}
+
 	if err := initModels(); err != nil {
 		return err
 	}
@@ -175,6 +179,32 @@ func CloseDB() error {
 // GetDB returns the global GORM database instance.
 func GetDB() *gorm.DB {
 	return db
+}
+
+func configureSQLiteConnection(gdb *gorm.DB) error {
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		return err
+	}
+
+	// SQLite behaves much better for mixed cron writes + UI reads with WAL
+	// and a busy timeout instead of immediate "database is locked" failures.
+	sqlDB.SetMaxOpenConns(1)
+	sqlDB.SetMaxIdleConns(1)
+
+	pragmas := []string{
+		"PRAGMA journal_mode = WAL;",
+		"PRAGMA synchronous = NORMAL;",
+		"PRAGMA foreign_keys = ON;",
+		"PRAGMA busy_timeout = 10000;",
+	}
+	for _, pragma := range pragmas {
+		if err := gdb.Exec(pragma).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // IsNotFound checks if the given error is a GORM record not found error.
