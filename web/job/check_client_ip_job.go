@@ -15,14 +15,9 @@ import (
 	"github.com/mhsanaei/3x-ui/v2/database"
 	"github.com/mhsanaei/3x-ui/v2/database/model"
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/mhsanaei/3x-ui/v2/web/service"
 	"github.com/mhsanaei/3x-ui/v2/xray"
 )
-
-// IPWithTimestamp tracks an IP address with its last seen timestamp
-type IPWithTimestamp struct {
-	IP        string `json:"ip"`
-	Timestamp int64  `json:"timestamp"`
-}
 
 // CheckClientIpJob monitors client IP addresses from access logs and manages IP blocking based on configured limits.
 type CheckClientIpJob struct {
@@ -55,6 +50,8 @@ func (j *CheckClientIpJob) Run() {
 		}
 		shouldClearAccessLog = j.processLogFile(enforceIPLimit)
 	}
+
+	j.pruneInactiveClientIPs()
 
 	if shouldClearAccessLog || (isAccessLogAvailable && time.Now().Unix()-j.lastClear > 3600) {
 		j.clearAccessLog()
@@ -172,9 +169,9 @@ func (j *CheckClientIpJob) processLogFile(enforceIPLimit bool) bool {
 	for email, ipTimestamps := range inboundClientIps {
 
 		// Convert to IPWithTimestamp slice
-		ipsWithTime := make([]IPWithTimestamp, 0, len(ipTimestamps))
+		ipsWithTime := make([]service.StoredClientIP, 0, len(ipTimestamps))
 		for ip, timestamp := range ipTimestamps {
-			ipsWithTime = append(ipsWithTime, IPWithTimestamp{IP: ip, Timestamp: timestamp})
+			ipsWithTime = append(ipsWithTime, service.StoredClientIP{IP: ip, Timestamp: timestamp})
 		}
 
 		clientIpsRecord, err := j.getInboundClientIps(email)
@@ -228,7 +225,7 @@ func (j *CheckClientIpJob) getInboundClientIps(clientEmail string) (*model.Inbou
 	return InboundClientIps, nil
 }
 
-func (j *CheckClientIpJob) addInboundClientIps(clientEmail string, ipsWithTime []IPWithTimestamp) error {
+func (j *CheckClientIpJob) addInboundClientIps(clientEmail string, ipsWithTime []service.StoredClientIP) error {
 	inboundClientIps := &model.InboundClientIps{}
 	jsonIps, err := json.Marshal(ipsWithTime)
 	j.checkError(err)
@@ -254,7 +251,7 @@ func (j *CheckClientIpJob) addInboundClientIps(clientEmail string, ipsWithTime [
 	return nil
 }
 
-func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.InboundClientIps, clientEmail string, newIpsWithTime []IPWithTimestamp, enforceIPLimit bool) bool {
+func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.InboundClientIps, clientEmail string, newIpsWithTime []service.StoredClientIP, enforceIPLimit bool) bool {
 	// Get the inbound configuration
 	inbound, err := j.getInboundByEmail(clientEmail)
 	if err != nil {
@@ -283,40 +280,18 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	}
 
 	if !enforceIPLimit || !clientFound || limitIp <= 0 || !inbound.Enable {
-		// Keep IP history even when IP limiting is disabled or cannot be enforced.
-		jsonIps, _ := json.Marshal(newIpsWithTime)
-		inboundClientIps.Ips = string(jsonIps)
-		db := database.GetDB()
-		db.Save(inboundClientIps)
+		j.saveActiveClientIPs(inboundClientIps, clientEmail, newIpsWithTime)
 		return false
 	}
 
-	// Parse old IPs from database
-	var oldIpsWithTime []IPWithTimestamp
-	if inboundClientIps.Ips != "" {
-		json.Unmarshal([]byte(inboundClientIps.Ips), &oldIpsWithTime)
+	oldIpsWithTime, err := service.ParseStoredClientIPs(inboundClientIps.Ips)
+	if err != nil {
+		logger.Warning("failed to parse existing client IPs for", clientEmail, ":", err)
 	}
 
-	// Merge old and new IPs, keeping the latest timestamp for each IP
-	ipMap := make(map[string]int64)
-	for _, ipTime := range oldIpsWithTime {
-		ipMap[ipTime.IP] = ipTime.Timestamp
-	}
-	for _, ipTime := range newIpsWithTime {
-		if existingTime, ok := ipMap[ipTime.IP]; !ok || ipTime.Timestamp > existingTime {
-			ipMap[ipTime.IP] = ipTime.Timestamp
-		}
-	}
-
-	// Convert back to slice and sort by timestamp (oldest first)
-	// This ensures we always protect the original/current connections and ban new excess ones.
-	allIps := make([]IPWithTimestamp, 0, len(ipMap))
-	for ip, timestamp := range ipMap {
-		allIps = append(allIps, IPWithTimestamp{IP: ip, Timestamp: timestamp})
-	}
-	sort.Slice(allIps, func(i, j int) bool {
-		return allIps[i].Timestamp < allIps[j].Timestamp // Ascending order (oldest first)
-	})
+	mergedIps := service.MergeStoredClientIPs(oldIpsWithTime, newIpsWithTime)
+	clientOnline := j.isClientOnline(clientEmail)
+	activeIps := service.PruneActiveClientIPs(mergedIps, clientOnline, time.Now())
 
 	shouldCleanLog := false
 	j.disAllowedIps = []string{}
@@ -332,12 +307,17 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	log.SetFlags(log.LstdFlags)
 
 	// Check if we exceed the limit
-	if len(allIps) > limitIp {
+	if len(activeIps) > limitIp {
 		shouldCleanLog = true
 
-		// Keep the oldest IPs (currently active connections) and ban the new excess ones.
-		keptIps := allIps[:limitIp]
-		bannedIps := allIps[limitIp:]
+		ipsForLimit := append([]service.StoredClientIP(nil), activeIps...)
+		sort.SliceStable(ipsForLimit, func(i, j int) bool {
+			return ipsForLimit[i].Timestamp < ipsForLimit[j].Timestamp
+		})
+
+		// Keep the oldest active IPs and ban the new excess ones.
+		keptIps := ipsForLimit[:limitIp]
+		bannedIps := ipsForLimit[limitIp:]
 
 		// Log banned IPs in the format fail2ban filters expect: [LIMIT_IP] Email = X || Disconnecting OLD IP = Y || Timestamp = Z
 		for _, ipTime := range bannedIps {
@@ -345,20 +325,16 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 			log.Printf("[LIMIT_IP] Email = %s || Disconnecting OLD IP = %s || Timestamp = %d", clientEmail, ipTime.IP, ipTime.Timestamp)
 		}
 
-		// Update database with only the currently active (kept) IPs
-		jsonIps, _ := json.Marshal(keptIps)
-		inboundClientIps.Ips = string(jsonIps)
+		if err := j.persistClientIPs(inboundClientIps, keptIps); err != nil {
+			logger.Error("failed to save inboundClientIps:", err)
+			return false
+		}
 	} else {
-		// Under limit, save all IPs
-		jsonIps, _ := json.Marshal(allIps)
-		inboundClientIps.Ips = string(jsonIps)
-	}
-
-	db := database.GetDB()
-	err = db.Save(inboundClientIps).Error
-	if err != nil {
-		logger.Error("failed to save inboundClientIps:", err)
-		return false
+		// Under limit, save only currently active IPs.
+		if err := j.persistClientIPs(inboundClientIps, activeIps); err != nil {
+			logger.Error("failed to save inboundClientIps:", err)
+			return false
+		}
 	}
 
 	if len(j.disAllowedIps) > 0 {
@@ -366,6 +342,69 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 	}
 
 	return shouldCleanLog
+}
+
+func (j *CheckClientIpJob) pruneInactiveClientIPs() {
+	db := database.GetDB()
+	var records []model.InboundClientIps
+	if err := db.Find(&records).Error; err != nil {
+		logger.Warning("failed to load client IP records:", err)
+		return
+	}
+
+	now := time.Now()
+	for _, record := range records {
+		entries, err := service.ParseStoredClientIPs(record.Ips)
+		if err != nil {
+			logger.Warning("failed to parse stored client IPs for", record.ClientEmail, ":", err)
+			continue
+		}
+
+		activeIPs := service.PruneActiveClientIPs(entries, j.isClientOnline(record.ClientEmail), now)
+		if err := j.persistClientIPs(&record, activeIPs); err != nil {
+			logger.Warning("failed to prune client IPs for", record.ClientEmail, ":", err)
+		}
+	}
+}
+
+func (j *CheckClientIpJob) saveActiveClientIPs(inboundClientIps *model.InboundClientIps, clientEmail string, newIpsWithTime []service.StoredClientIP) {
+	existingIps, err := service.ParseStoredClientIPs(inboundClientIps.Ips)
+	if err != nil {
+		logger.Warning("failed to parse existing client IPs for", clientEmail, ":", err)
+	}
+
+	activeIps := service.PruneActiveClientIPs(
+		service.MergeStoredClientIPs(existingIps, newIpsWithTime),
+		j.isClientOnline(clientEmail),
+		time.Now(),
+	)
+	if err := j.persistClientIPs(inboundClientIps, activeIps); err != nil {
+		logger.Warning("failed to save active client IPs for", clientEmail, ":", err)
+	}
+}
+
+func (j *CheckClientIpJob) persistClientIPs(inboundClientIps *model.InboundClientIps, ips []service.StoredClientIP) error {
+	db := database.GetDB()
+	if len(ips) == 0 {
+		return db.Delete(inboundClientIps).Error
+	}
+
+	jsonIps, err := json.Marshal(ips)
+	if err != nil {
+		return err
+	}
+
+	inboundClientIps.Ips = string(jsonIps)
+	return db.Save(inboundClientIps).Error
+}
+
+func (j *CheckClientIpJob) isClientOnline(clientEmail string) bool {
+	for _, email := range GetLastOnlineClients() {
+		if email == clientEmail {
+			return true
+		}
+	}
+	return false
 }
 
 func (j *CheckClientIpJob) getInboundByEmail(clientEmail string) (*model.Inbound, error) {

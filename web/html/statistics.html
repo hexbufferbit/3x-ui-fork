@@ -76,6 +76,7 @@
     .ip-tag {
         font-size: 11px;
         margin: 1px 2px;
+        cursor: pointer;
     }
     .statistics-table .ant-table-thead > tr > th,
     .statistics-table .ant-table-tbody > tr > td {
@@ -88,6 +89,21 @@
         text-overflow: ellipsis;
         vertical-align: bottom;
         white-space: nowrap;
+    }
+    .ip-popover {
+        min-width: 220px;
+        max-width: 280px;
+    }
+    .ip-popover-row {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 4px;
+    }
+    .ip-popover-row strong {
+        min-width: 78px;
+    }
+    .ip-popover-note {
+        color: #999;
     }
 </style>
 {{ template "page/head_end" .}}
@@ -178,7 +194,7 @@
                                                 :data-source="filteredStats"
                                                 :row-key="record => record.email"
                                                 :pagination="{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10','20','50','100'] }"
-                                                :scroll="{ x: 1550 }"
+                                                :scroll="{ x: 980 }"
                                                 size="small"
                                                 bordered>
                                                 <template slot="status" slot-scope="text, record">
@@ -196,22 +212,6 @@
                                                 <template slot="totalUsage" slot-scope="text, record">
                                                     [[ sizeFormat(record.allTimeUsage) ]]
                                                 </template>
-                                                <template slot="upload" slot-scope="text, record">
-                                                    [[ sizeFormat(record.totalUpload) ]]
-                                                </template>
-                                                <template slot="download" slot-scope="text, record">
-                                                    [[ sizeFormat(record.totalDownload) ]]
-                                                </template>
-                                                <template slot="currentBw" slot-scope="text, record">
-                                                    <span class="bw-cell" v-if="record.isOnline">
-                                                        <a-icon type="arrow-up" style="color: #1890ff;" />
-                                                        [[ sizeFormat(record.currentBwUp) ]]/s
-                                                        &nbsp;
-                                                        <a-icon type="arrow-down" style="color: #52c41a;" />
-                                                        [[ sizeFormat(record.currentBwDown) ]]/s
-                                                    </span>
-                                                    <span v-else style="color: #999;">-</span>
-                                                </template>
                                                 <template slot="lastOnline" slot-scope="text, record">
                                                     <span v-if="record.lastOnline > 0">
                                                         [[ moment(record.lastOnline).fromNow() ]]
@@ -220,7 +220,52 @@
                                                 </template>
                                                 <template slot="ips" slot-scope="text, record">
                                                     <template v-if="record.ips && record.ips.length > 0">
-                                                        <a-tag class="ip-tag" v-for="ip in record.ips" :key="ip">[[ ip ]]</a-tag>
+                                                        <a-popover
+                                                            v-for="ipEntry in record.ips"
+                                                            :key="ipEntry.ip"
+                                                            trigger="hover"
+                                                            placement="topLeft"
+                                                            @visibleChange="onIpPopoverVisibleChange(ipEntry.ip, $event)">
+                                                            <template slot="content">
+                                                                <div class="ip-popover">
+                                                                    <div class="ip-popover-row">
+                                                                        <strong>IP</strong>
+                                                                        <span>[[ ipEntry.ip ]]</span>
+                                                                    </div>
+                                                                    <div class="ip-popover-row">
+                                                                        <strong>Last seen</strong>
+                                                                        <span>[[ formatIpLastSeen(ipEntry.lastSeen) ]]</span>
+                                                                    </div>
+                                                                    <template v-if="ipInfoLoading[ipEntry.ip]">
+                                                                        <a-spin size="small"></a-spin>
+                                                                    </template>
+                                                                    <template v-else>
+                                                                        <div v-if="ipInfo(ipEntry.ip).message" class="ip-popover-note">
+                                                                            [[ ipInfo(ipEntry.ip).message ]]
+                                                                        </div>
+                                                                        <template v-else>
+                                                                            <div class="ip-popover-row">
+                                                                                <strong>ISP</strong>
+                                                                                <span>[[ ipInfo(ipEntry.ip).isp || '-' ]]</span>
+                                                                            </div>
+                                                                            <div class="ip-popover-row">
+                                                                                <strong>Org</strong>
+                                                                                <span>[[ ipInfo(ipEntry.ip).organization || '-' ]]</span>
+                                                                            </div>
+                                                                            <div class="ip-popover-row">
+                                                                                <strong>Location</strong>
+                                                                                <span>[[ formatIpLocation(ipInfo(ipEntry.ip)) || '-' ]]</span>
+                                                                            </div>
+                                                                            <div class="ip-popover-row">
+                                                                                <strong>Timezone</strong>
+                                                                                <span>[[ ipInfo(ipEntry.ip).timezone || '-' ]]</span>
+                                                                            </div>
+                                                                        </template>
+                                                                    </template>
+                                                                </div>
+                                                            </template>
+                                                            <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                        </a-popover>
                                                     </template>
                                                     <span v-else style="color: #999;">-</span>
                                                 </template>
@@ -292,17 +337,10 @@
                                                     :pagination="false"
                                                     size="small"
                                                     bordered>
-                                                    <template slot="bwUp" slot-scope="text, record">
-                                                        <span class="bw-cell">
-                                                            <a-icon type="arrow-up" style="color: #1890ff;" />
-                                                            [[ sizeFormat(record.currentBwUp) ]]/s
-                                                        </span>
-                                                    </template>
-                                                    <template slot="bwDown" slot-scope="text, record">
-                                                        <span class="bw-cell">
-                                                            <a-icon type="arrow-down" style="color: #52c41a;" />
-                                                            [[ sizeFormat(record.currentBwDown) ]]/s
-                                                        </span>
+                                                    <template slot="onlineEmail" slot-scope="text, record">
+                                                        <a-tooltip :title="record.email">
+                                                            <span class="statistics-email">[[ record.email ]]</span>
+                                                        </a-tooltip>
                                                     </template>
                                                     <template slot="bwTotal" slot-scope="text, record">
                                                         <span class="bw-cell" style="font-weight: bold;">
@@ -335,6 +373,8 @@
             loading: false,
             fetched: false,
             searchText: '',
+            ipInfoCache: {},
+            ipInfoLoading: {},
             stats: [],
             refreshIntervalId: null,
             trafficListener: null,
@@ -370,26 +410,6 @@
                     sorter: (a, b) => a.allTimeUsage - b.allTimeUsage,
                 },
                 {
-                    title: '{{ i18n "pages.statistics.colUpload" }}',
-                    key: 'upload',
-                    width: 100,
-                    scopedSlots: { customRender: 'upload' },
-                    sorter: (a, b) => a.totalUpload - b.totalUpload,
-                },
-                {
-                    title: '{{ i18n "pages.statistics.colDownload" }}',
-                    key: 'download',
-                    width: 100,
-                    scopedSlots: { customRender: 'download' },
-                    sorter: (a, b) => a.totalDownload - b.totalDownload,
-                },
-                {
-                    title: '{{ i18n "pages.statistics.colCurrentBw" }}',
-                    key: 'currentBw',
-                    width: 200,
-                    scopedSlots: { customRender: 'currentBw' },
-                },
-                {
                     title: '{{ i18n "pages.statistics.colLastOnline" }}',
                     key: 'lastOnline',
                     width: 140,
@@ -406,23 +426,9 @@
             onlineBwColumns: [
                 {
                     title: '{{ i18n "pages.statistics.colEmail" }}',
-                    key: 'email',
+                    key: 'onlineEmail',
                     width: 280,
-                    scopedSlots: { customRender: 'email' },
-                },
-                {
-                    title: '{{ i18n "pages.statistics.colUploadBw" }}',
-                    key: 'bwUp',
-                    width: 150,
-                    scopedSlots: { customRender: 'bwUp' },
-                    sorter: (a, b) => a.currentBwUp - b.currentBwUp,
-                },
-                {
-                    title: '{{ i18n "pages.statistics.colDownloadBw" }}',
-                    key: 'bwDown',
-                    width: 150,
-                    scopedSlots: { customRender: 'bwDown' },
-                    sorter: (a, b) => a.currentBwDown - b.currentBwDown,
+                    scopedSlots: { customRender: 'onlineEmail' },
                 },
                 {
                     title: '{{ i18n "pages.statistics.colTotalBw" }}',
@@ -439,7 +445,7 @@
                 const s = this.searchText.toLowerCase();
                 return this.stats.filter(r =>
                     r.email.toLowerCase().includes(s) ||
-                    (r.ips && r.ips.some(ip => ip.includes(s)))
+                    (r.ips && r.ips.some(ip => ip.ip.includes(s)))
                 );
             },
             onlineCount() {
@@ -513,6 +519,43 @@
                 if (m > 0) parts.push(m + 'm');
                 if (s > 0 && d === 0) parts.push(s + 's');
                 return parts.join(' ') || '0s';
+            },
+            ipInfo(ip) {
+                return this.ipInfoCache[ip] || {};
+            },
+            formatIpLocation(info) {
+                if (!info) return '';
+                return [info.city, info.region, info.country].filter(Boolean).join(', ');
+            },
+            formatIpLastSeen(lastSeen) {
+                if (!lastSeen || lastSeen <= 0) return '{{ i18n "pages.statistics.never" }}';
+                return moment(lastSeen).fromNow();
+            },
+            async loadIpInfo(ip) {
+                if (!ip || this.ipInfoCache[ip] || this.ipInfoLoading[ip]) {
+                    return;
+                }
+
+                this.$set(this.ipInfoLoading, ip, true);
+                try {
+                    const res = await axios.get('panel/api/statistics/ipInfo', {
+                        params: { ip },
+                    });
+                    if (res.data.success) {
+                        this.$set(this.ipInfoCache, ip, res.data.obj || { ip, message: 'IP information unavailable' });
+                    } else {
+                        this.$set(this.ipInfoCache, ip, { ip, message: res.data.msg || 'IP information unavailable' });
+                    }
+                } catch (e) {
+                    this.$set(this.ipInfoCache, ip, { ip, message: 'IP information unavailable' });
+                } finally {
+                    this.$delete(this.ipInfoLoading, ip);
+                }
+            },
+            onIpPopoverVisibleChange(ip, visible) {
+                if (visible) {
+                    this.loadIpInfo(ip);
+                }
             },
             async fetchStats() {
                 this.loading = true;

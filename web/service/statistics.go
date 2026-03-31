@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v2/database"
@@ -17,16 +16,16 @@ type StatisticsService struct{}
 
 // ClientStatResult holds aggregated statistics for a single client for the API response.
 type ClientStatResult struct {
-	Email         string   `json:"email"`
-	TotalUptime   int64    `json:"totalUptime"`   // seconds
-	TotalUpload   int64    `json:"totalUpload"`   // bytes (allTime up)
-	TotalDownload int64    `json:"totalDownload"` // bytes (allTime down)
-	AllTimeUsage  int64    `json:"allTimeUsage"`  // bytes
-	IsOnline      bool     `json:"isOnline"`
-	CurrentBwUp   int64    `json:"currentBwUp"`   // bytes/sec
-	CurrentBwDown int64    `json:"currentBwDown"` // bytes/sec
-	LastOnline    int64    `json:"lastOnline"`    // unix ms
-	IPs           []string `json:"ips"`           // client IP addresses
+	Email         string           `json:"email"`
+	TotalUptime   int64            `json:"totalUptime"`   // seconds
+	TotalUpload   int64            `json:"totalUpload"`   // bytes (allTime up)
+	TotalDownload int64            `json:"totalDownload"` // bytes (allTime down)
+	AllTimeUsage  int64            `json:"allTimeUsage"`  // bytes
+	IsOnline      bool             `json:"isOnline"`
+	CurrentBwUp   int64            `json:"currentBwUp"`   // bytes/sec
+	CurrentBwDown int64            `json:"currentBwDown"` // bytes/sec
+	LastOnline    int64            `json:"lastOnline"`    // unix ms
+	IPs           []ClientIPResult `json:"ips"`           // currently active client IP addresses
 }
 
 // RecordOnlineClients increments uptime for all currently online clients.
@@ -96,19 +95,15 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 	// Build client IP map
 	var clientIps []model.InboundClientIps
 	db.Find(&clientIps)
-	type ipEntry struct {
-		IP string `json:"ip"`
-	}
-	ipMap := make(map[string][]string, len(clientIps))
+	now := time.Now()
+	ipMap := make(map[string][]ClientIPResult, len(clientIps))
 	for _, cip := range clientIps {
-		var entries []ipEntry
-		if err := json.Unmarshal([]byte(cip.Ips), &entries); err == nil {
-			ips := make([]string, 0, len(entries))
-			for _, e := range entries {
-				ips = append(ips, e.IP)
-			}
-			ipMap[cip.ClientEmail] = ips
+		entries, err := ParseStoredClientIPs(cip.Ips)
+		if err != nil {
+			logger.Warning("failed to parse stored IPs for", cip.ClientEmail, ":", err)
+			continue
 		}
+		ipMap[cip.ClientEmail] = BuildClientIPResults(entries, onlineSet[cip.ClientEmail], now)
 	}
 
 	// Merge into results

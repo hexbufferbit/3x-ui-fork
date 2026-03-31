@@ -1,6 +1,8 @@
 package controller
 
 import (
+	"strings"
+
 	"github.com/mhsanaei/3x-ui/v2/web/job"
 	"github.com/mhsanaei/3x-ui/v2/web/service"
 
@@ -20,6 +22,7 @@ func NewStatisticsController(g *gin.RouterGroup) *StatisticsController {
 
 func (a *StatisticsController) initRouter(g *gin.RouterGroup) {
 	g.GET("/stats", a.getStats)
+	g.GET("/ipInfo", a.getIPInfo)
 	g.POST("/deleteStats", a.deleteStats)
 }
 
@@ -41,4 +44,9 @@ func (a *StatisticsController) deleteStats(c *gin.Context) {
 		return
 	}
 	jsonMsg(c, I18nWeb(c, "pages.statistics.toasts.deleteStatsSuccess"), nil)
+}
+
+func (a *StatisticsController) getIPInfo(c *gin.Context) {
+	ip := strings.TrimSpace(c.Query("ip"))
+	jsonObj(c, a.statisticsService.GetIPInfo(ip), nil)
 }
