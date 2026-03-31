@@ -705,7 +705,10 @@
                     const res = await axios.post('panel/api/statistics/deleteStats');
                     if (res.data.success) {
                         this.$message.success(res.data.msg || '{{ i18n "pages.statistics.toasts.deleteStatsSuccess" }}');
-                        await this.fetchStats();
+                        this.stopLiveUpdates();
+                        window.setTimeout(() => {
+                            window.location.reload();
+                        }, 5000);
                     } else {
                         this.$message.error(res.data.msg || 'Failed to delete statistics');
                     }

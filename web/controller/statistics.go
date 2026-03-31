@@ -15,6 +15,7 @@ type StatisticsController struct {
 	BaseController
 	statisticsService service.StatisticsService
 	settingService    service.SettingService
+	panelService      service.PanelService
 }
 
 func NewStatisticsController(g *gin.RouterGroup) *StatisticsController {
@@ -60,6 +61,10 @@ func (a *StatisticsController) deleteStats(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.statistics.toasts.deleteStatsFail"), err)
 		return
 	}
+	if err := a.panelService.RestartPanel(time.Second * 3); err != nil {
+		jsonMsg(c, I18nWeb(c, "pages.statistics.toasts.deleteStatsSuccess"), err)
+		return
+	}
 	jsonMsg(c, I18nWeb(c, "pages.statistics.toasts.deleteStatsSuccess"), nil)
 }
 
@@ -88,10 +93,10 @@ func (a *StatisticsController) getAutoDeleteConfig(c *gin.Context) {
 
 func (a *StatisticsController) updateAutoDeleteConfig(c *gin.Context) {
 	var payload struct {
-		Hours int `json:"hours"`
+		Hours int `json:"hours" form:"hours"`
 	}
 
-	if err := c.ShouldBindJSON(&payload); err != nil {
+	if err := c.ShouldBind(&payload); err != nil {
 		jsonMsg(c, "Invalid auto delete configuration", err)
 		return
 	}
