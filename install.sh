@@ -829,6 +829,12 @@ install_x-ui() {
     fi
     chmod +x x-ui bin/xray-linux-$(arch)
     
+    # Install to target folder
+    cd ..
+    cp -rf x-ui/. ${xui_folder}/
+    rm -rf x-ui/
+    cd ${xui_folder}
+    
     # Update x-ui cli and se set permission
     mv -f /usr/bin/x-ui-temp /usr/bin/x-ui
     chmod +x /usr/bin/x-ui

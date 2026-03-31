@@ -333,7 +333,6 @@ func (t *Tgbot) Start(i18nFS embed.FS) error {
 			{Command: "help", Description: t.I18nBot("tgbot.commands.helpDesc")},
 			{Command: "status", Description: t.I18nBot("tgbot.commands.statusDesc")},
 			{Command: "id", Description: t.I18nBot("tgbot.commands.idDesc")},
-
 		},
 	})
 	if err != nil {
