@@ -45,25 +45,15 @@ func (j *CheckClientIpJob) Run() {
 
 	shouldClearAccessLog := false
 	iplimitActive := j.hasLimitIp()
-	f2bInstalled := j.checkFail2BanInstalled()
 	isAccessLogAvailable := j.checkAccessLogAvailable(iplimitActive)
 
 	if isAccessLogAvailable {
-		if runtime.GOOS == "windows" {
-			if iplimitActive {
-				shouldClearAccessLog = j.processLogFile()
-			}
-		} else {
-			if iplimitActive {
-				if f2bInstalled {
-					shouldClearAccessLog = j.processLogFile()
-				} else {
-					if !f2bInstalled {
-						logger.Warning("[LimitIP] Fail2Ban is not installed, Please install Fail2Ban from the x-ui bash menu.")
-					}
-				}
-			}
+		enforceIPLimit := iplimitActive
+		if runtime.GOOS != "windows" && iplimitActive && !j.checkFail2BanInstalled() {
+			enforceIPLimit = false
+			logger.Warning("[LimitIP] Fail2Ban is not installed, IP history will still be collected but IP limit enforcement is disabled.")
 		}
+		shouldClearAccessLog = j.processLogFile(enforceIPLimit)
 	}
 
 	if shouldClearAccessLog || (isAccessLogAvailable && time.Now().Unix()-j.lastClear > 3600) {
@@ -121,7 +111,7 @@ func (j *CheckClientIpJob) hasLimitIp() bool {
 	return false
 }
 
-func (j *CheckClientIpJob) processLogFile() bool {
+func (j *CheckClientIpJob) processLogFile(enforceIPLimit bool) bool {
 
 	ipRegex := regexp.MustCompile(`from (?:tcp:|udp:)?\[?([0-9a-fA-F\.:]+)\]?:\d+ accepted`)
 	emailRegex := regexp.MustCompile(`email: (.+)$`)
@@ -193,7 +183,7 @@ func (j *CheckClientIpJob) processLogFile() bool {
 			continue
 		}
 
-		shouldCleanLog = j.updateInboundClientIps(clientIpsRecord, email, ipsWithTime) || shouldCleanLog
+		shouldCleanLog = j.updateInboundClientIps(clientIpsRecord, email, ipsWithTime, enforceIPLimit) || shouldCleanLog
 	}
 
 	return shouldCleanLog
@@ -264,7 +254,7 @@ func (j *CheckClientIpJob) addInboundClientIps(clientEmail string, ipsWithTime [
 	return nil
 }
 
-func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.InboundClientIps, clientEmail string, newIpsWithTime []IPWithTimestamp) bool {
+func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.InboundClientIps, clientEmail string, newIpsWithTime []IPWithTimestamp, enforceIPLimit bool) bool {
 	// Get the inbound configuration
 	inbound, err := j.getInboundByEmail(clientEmail)
 	if err != nil {
@@ -292,8 +282,8 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 		}
 	}
 
-	if !clientFound || limitIp <= 0 || !inbound.Enable {
-		// No limit or inbound disabled, just update and return
+	if !enforceIPLimit || !clientFound || limitIp <= 0 || !inbound.Enable {
+		// Keep IP history even when IP limiting is disabled or cannot be enforced.
 		jsonIps, _ := json.Marshal(newIpsWithTime)
 		inboundClientIps.Ips = string(jsonIps)
 		db := database.GetDB()

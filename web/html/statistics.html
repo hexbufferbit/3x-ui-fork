@@ -77,6 +77,18 @@
         font-size: 11px;
         margin: 1px 2px;
     }
+    .statistics-table .ant-table-thead > tr > th,
+    .statistics-table .ant-table-tbody > tr > td {
+        white-space: nowrap;
+    }
+    .statistics-email {
+        display: inline-block;
+        max-width: 280px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        white-space: nowrap;
+    }
 </style>
 {{ template "page/head_end" .}}
 
@@ -161,16 +173,22 @@
                                                 <span>{{ i18n "pages.statistics.tableView" }}</span>
                                             </template>
                                             <a-table
+                                                class="statistics-table"
                                                 :columns="columns"
                                                 :data-source="filteredStats"
                                                 :row-key="record => record.email"
                                                 :pagination="{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10','20','50','100'] }"
-                                                :scroll="{ x: 1400 }"
+                                                :scroll="{ x: 1550 }"
                                                 size="small"
                                                 bordered>
                                                 <template slot="status" slot-scope="text, record">
                                                     <span class="online-dot" :class="record.isOnline ? 'online' : 'offline'"></span>
                                                     <span>[[ record.isOnline ? '{{ i18n "online" }}' : '{{ i18n "offline" }}' ]]</span>
+                                                </template>
+                                                <template slot="email" slot-scope="text, record">
+                                                    <a-tooltip :title="record.email">
+                                                        <span class="statistics-email">[[ record.email ]]</span>
+                                                    </a-tooltip>
                                                 </template>
                                                 <template slot="uptime" slot-scope="text, record">
                                                     [[ formatDuration(record.totalUptime) ]]
@@ -318,6 +336,9 @@
             fetched: false,
             searchText: '',
             stats: [],
+            refreshIntervalId: null,
+            trafficListener: null,
+            connectListener: null,
             columns: [
                 {
                     title: '{{ i18n "pages.statistics.colStatus" }}',
@@ -329,11 +350,10 @@
                 },
                 {
                     title: '{{ i18n "pages.statistics.colEmail" }}',
-                    dataIndex: 'email',
                     key: 'email',
-                    width: 160,
+                    width: 280,
+                    scopedSlots: { customRender: 'email' },
                     sorter: (a, b) => a.email.localeCompare(b.email),
-                    ellipsis: true,
                 },
                 {
                     title: '{{ i18n "pages.statistics.colUptime" }}',
@@ -386,9 +406,9 @@
             onlineBwColumns: [
                 {
                     title: '{{ i18n "pages.statistics.colEmail" }}',
-                    dataIndex: 'email',
                     key: 'email',
-                    ellipsis: true,
+                    width: 280,
+                    scopedSlots: { customRender: 'email' },
                 },
                 {
                     title: '{{ i18n "pages.statistics.colUploadBw" }}',
@@ -510,15 +530,6 @@
                     this.fetched = true;
                 }
             },
-            startPolling() {
-                const pollInterval = setInterval(async () => {
-                    if (window.wsClient && window.wsClient.isConnected) {
-                        clearInterval(pollInterval);
-                        return;
-                    }
-                    try { await this.fetchStats(); } catch (e) { console.error(e); }
-                }, 10000);
-            },
             async deleteStats() {
                 this.loading = true;
                 try {
@@ -535,29 +546,60 @@
                     this.loading = false;
                 }
             },
+            refreshStatsLive() {
+                if (this.loading) {
+                    return;
+                }
+                this.fetchStats();
+            },
+            startLiveUpdates() {
+                this.stopLiveUpdates();
+
+                this.refreshIntervalId = window.setInterval(() => {
+                    this.refreshStatsLive();
+                }, 10000);
+
+                if (!window.wsClient) {
+                    return;
+                }
+
+                this.trafficListener = () => {
+                    this.refreshStatsLive();
+                };
+                this.connectListener = () => {
+                    this.refreshStatsLive();
+                };
+
+                window.wsClient.on('traffic', this.trafficListener);
+                window.wsClient.on('connected', this.connectListener);
+                window.wsClient.connect();
+            },
+            stopLiveUpdates() {
+                if (this.refreshIntervalId) {
+                    clearInterval(this.refreshIntervalId);
+                    this.refreshIntervalId = null;
+                }
+
+                if (!window.wsClient) {
+                    return;
+                }
+
+                if (this.trafficListener) {
+                    window.wsClient.off('traffic', this.trafficListener);
+                    this.trafficListener = null;
+                }
+                if (this.connectListener) {
+                    window.wsClient.off('connected', this.connectListener);
+                    this.connectListener = null;
+                }
+            },
         },
         async mounted() {
             await this.fetchStats();
-            // Auto-refresh via WebSocket traffic events
-            if (window.wsClient) {
-                window.wsClient.connect();
-                window.wsClient.on('traffic', (payload) => {
-                    // Re-fetch stats when traffic is updated (every 10s)
-                    this.fetchStats();
-                });
-                window.wsClient.on('error', () => {
-                    console.warn('WebSocket connection failed, falling back to polling');
-                    this.startPolling();
-                });
-                window.wsClient.on('disconnected', () => {
-                    if (window.wsClient.reconnectAttempts >= window.wsClient.maxReconnectAttempts) {
-                        console.warn('WebSocket reconnection failed, falling back to polling');
-                        this.startPolling();
-                    }
-                });
-            } else {
-                this.startPolling();
-            }
+            this.startLiveUpdates();
+        },
+        beforeDestroy() {
+            this.stopLiveUpdates();
         },
     });
 </script>
