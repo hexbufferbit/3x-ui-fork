@@ -88,11 +88,9 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 	// Build bandwidth delta map (from last traffic cycle)
 	bwUpMap := make(map[string]int64)
 	bwDownMap := make(map[string]int64)
-	if clientTrafficDeltas != nil {
-		for _, ct := range clientTrafficDeltas {
-			bwUpMap[ct.Email] = ct.Up // bytes in last 10s interval
-			bwDownMap[ct.Email] = ct.Down
-		}
+	for _, ct := range clientTrafficDeltas {
+		bwUpMap[ct.Email] = ct.Up // bytes in last 10s interval
+		bwDownMap[ct.Email] = ct.Down
 	}
 
 	// Build client IP map
