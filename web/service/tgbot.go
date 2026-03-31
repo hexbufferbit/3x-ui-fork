@@ -3800,10 +3800,6 @@ func (t *Tgbot) CheckUsageWarnings() {
 		}
 
 		for _, traffic := range inbound.ClientStats {
-			if !traffic.Enable {
-				continue
-			}
-
 			client, ok := clientMap[strings.ToLower(traffic.Email)]
 			if !ok {
 				continue
