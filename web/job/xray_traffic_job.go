@@ -13,10 +13,11 @@ import (
 
 // XrayTrafficJob collects and processes traffic statistics from Xray, updating the database and optionally informing external APIs.
 type XrayTrafficJob struct {
-	settingService  service.SettingService
-	xrayService     service.XrayService
-	inboundService  service.InboundService
-	outboundService service.OutboundService
+	settingService    service.SettingService
+	xrayService       service.XrayService
+	inboundService    service.InboundService
+	outboundService   service.OutboundService
+	statisticsService service.StatisticsService
 }
 
 // NewXrayTrafficJob creates a new traffic collection job instance.
@@ -57,6 +58,13 @@ func (j *XrayTrafficJob) Run() {
 		logger.Warning("get clients last online failed:", err)
 		lastOnlineMap = make(map[string]int64)
 	}
+
+	// Record uptime for online clients (10s interval)
+	j.statisticsService.RecordOnlineClients(onlineClients, 10)
+
+	// Store latest traffic deltas for real-time bandwidth queries
+	SetLastClientTrafficDeltas(clientTraffics)
+	SetLastOnlineClients(onlineClients)
 
 	// Fetch updated inbounds from database with accumulated traffic values
 	// This ensures frontend receives the actual total traffic, not just delta values

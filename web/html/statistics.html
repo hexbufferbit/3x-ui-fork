@@ -1,0 +1,513 @@
+{{ template "page/head_start" .}}
+<style>
+    .stats-bar-container {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .stats-bar {
+        height: 20px;
+        border-radius: 4px;
+        transition: width 0.5s ease;
+        min-width: 2px;
+    }
+    .stats-chart-row {
+        display: flex;
+        align-items: center;
+        margin-bottom: 6px;
+        gap: 8px;
+    }
+    .stats-chart-label {
+        width: 160px;
+        text-align: right;
+        font-size: 12px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .stats-chart-bar-wrap {
+        flex: 1;
+        height: 22px;
+        background: rgba(0,0,0,0.04);
+        border-radius: 4px;
+        overflow: hidden;
+        position: relative;
+    }
+    .stats-chart-bar {
+        height: 100%;
+        border-radius: 4px;
+        transition: width 0.6s ease;
+        display: flex;
+        align-items: center;
+        padding-left: 6px;
+        font-size: 11px;
+        color: #fff;
+        white-space: nowrap;
+    }
+    .stats-chart-value {
+        width: 100px;
+        text-align: left;
+        font-size: 12px;
+        flex-shrink: 0;
+    }
+    .online-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 6px;
+    }
+    .online-dot.online { background: #52c41a; }
+    .online-dot.offline { background: #d9d9d9; }
+    .bw-cell {
+        font-family: monospace;
+        font-size: 12px;
+    }
+</style>
+{{ template "page/head_end" .}}
+
+{{ template "page/body_start" .}}
+<a-layout id="app" v-cloak :class="themeSwitcher.currentTheme + ' statistics-page'">
+    <a-sidebar></a-sidebar>
+    <a-layout id="content-layout">
+        <a-layout-content>
+            <a-spin :spinning="loading" :delay="200" tip='{{ i18n "loading" }}'>
+                <transition name="list" appear>
+                    <template>
+                        <a-row v-if="!fetched">
+                            <a-card class="card-placeholder text-center">
+                                <a-spin tip='{{ i18n "loading" }}'></a-spin>
+                            </a-card>
+                        </a-row>
+                        <a-row :gutter="[16, 12]" v-else>
+                            <!-- Summary Cards -->
+                            <a-col :span="24">
+                                <a-card hoverable size="small" :style="{ padding: '16px' }">
+                                    <a-row :gutter="16">
+                                        <a-col :sm="12" :md="6">
+                                            <a-statistic :title="'{{ i18n "pages.statistics.totalClients" }}'"
+                                                :value="stats.length" />
+                                        </a-col>
+                                        <a-col :sm="12" :md="6">
+                                            <a-statistic :title="'{{ i18n "pages.statistics.onlineClients" }}'"
+                                                :value="onlineCount"
+                                                :value-style="{ color: '#3f8600' }" />
+                                        </a-col>
+                                        <a-col :sm="12" :md="6">
+                                            <a-statistic :title="'{{ i18n "pages.statistics.totalBandwidth" }}'"
+                                                :value="totalBandwidthFormatted" />
+                                        </a-col>
+                                        <a-col :sm="12" :md="6">
+                                            <a-statistic :title="'{{ i18n "pages.statistics.avgUptime" }}'"
+                                                :value="avgUptimeFormatted" />
+                                        </a-col>
+                                    </a-row>
+                                </a-card>
+                            </a-col>
+
+                            <!-- Actions Bar -->
+                            <a-col :span="24">
+                                <a-card hoverable size="small">
+                                    <a-row type="flex" align="middle" :gutter="12">
+                                        <a-col flex="auto">
+                                            <a-input-search
+                                                v-model="searchText"
+                                                :placeholder="'{{ i18n "pages.statistics.searchPlaceholder" }}'"
+                                                style="max-width: 300px;"
+                                                allow-clear />
+                                        </a-col>
+                                        <a-col>
+                                            <a-button type="primary" icon="reload" @click="fetchStats">
+                                                {{ i18n "pages.statistics.refresh" }}
+                                            </a-button>
+                                        </a-col>
+                                        <a-col>
+                                            <a-popconfirm
+                                                :title="'{{ i18n "pages.statistics.deleteConfirm" }}'"
+                                                @confirm="deleteStats"
+                                                ok-text='{{ i18n "confirm" }}'
+                                                cancel-text='{{ i18n "cancel" }}'>
+                                                <a-button type="danger" icon="delete">
+                                                    {{ i18n "pages.statistics.deleteStats" }}
+                                                </a-button>
+                                            </a-popconfirm>
+                                        </a-col>
+                                    </a-row>
+                                </a-card>
+                            </a-col>
+
+                            <!-- Tabs -->
+                            <a-col :span="24">
+                                <a-card hoverable>
+                                    <a-tabs default-active-key="table">
+                                        <!-- Table View -->
+                                        <a-tab-pane key="table">
+                                            <template #tab>
+                                                <a-icon type="table"></a-icon>
+                                                <span>{{ i18n "pages.statistics.tableView" }}</span>
+                                            </template>
+                                            <a-table
+                                                :columns="columns"
+                                                :data-source="filteredStats"
+                                                :row-key="record => record.email"
+                                                :pagination="{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10','20','50','100'] }"
+                                                :scroll="{ x: 900 }"
+                                                size="small"
+                                                bordered>
+                                                <template slot="status" slot-scope="text, record">
+                                                    <span class="online-dot" :class="record.isOnline ? 'online' : 'offline'"></span>
+                                                    <span>[[ record.isOnline ? '{{ i18n "online" }}' : '{{ i18n "offline" }}' ]]</span>
+                                                </template>
+                                                <template slot="uptime" slot-scope="text, record">
+                                                    [[ formatDuration(record.totalUptime) ]]
+                                                </template>
+                                                <template slot="totalUsage" slot-scope="text, record">
+                                                    [[ sizeFormat(record.allTimeUsage) ]]
+                                                </template>
+                                                <template slot="upload" slot-scope="text, record">
+                                                    [[ sizeFormat(record.totalUpload) ]]
+                                                </template>
+                                                <template slot="download" slot-scope="text, record">
+                                                    [[ sizeFormat(record.totalDownload) ]]
+                                                </template>
+                                                <template slot="currentBw" slot-scope="text, record">
+                                                    <span class="bw-cell" v-if="record.isOnline">
+                                                        <a-icon type="arrow-up" style="color: #1890ff;" />
+                                                        [[ sizeFormat(record.currentBwUp) ]]/s
+                                                        &nbsp;
+                                                        <a-icon type="arrow-down" style="color: #52c41a;" />
+                                                        [[ sizeFormat(record.currentBwDown) ]]/s
+                                                    </span>
+                                                    <span v-else style="color: #999;">-</span>
+                                                </template>
+                                                <template slot="lastOnline" slot-scope="text, record">
+                                                    <span v-if="record.lastOnline > 0">
+                                                        [[ moment(record.lastOnline).fromNow() ]]
+                                                    </span>
+                                                    <span v-else style="color: #999;">{{ i18n "pages.statistics.never" }}</span>
+                                                </template>
+                                            </a-table>
+                                        </a-tab-pane>
+
+                                        <!-- Uptime Chart -->
+                                        <a-tab-pane key="uptimeChart">
+                                            <template #tab>
+                                                <a-icon type="bar-chart"></a-icon>
+                                                <span>{{ i18n "pages.statistics.uptimeChart" }}</span>
+                                            </template>
+                                            <div style="padding: 16px 0;">
+                                                <div v-if="uptimeChartData.length === 0" class="text-center" style="padding: 40px; color: #999;">
+                                                    {{ i18n "pages.statistics.noData" }}
+                                                </div>
+                                                <div v-else>
+                                                    <div class="stats-chart-row" v-for="item in uptimeChartData" :key="item.email">
+                                                        <div class="stats-chart-label" :title="item.email">[[ item.email ]]</div>
+                                                        <div class="stats-chart-bar-wrap">
+                                                            <div class="stats-chart-bar"
+                                                                :style="{ width: item.percent + '%', background: item.color }">
+                                                            </div>
+                                                        </div>
+                                                        <div class="stats-chart-value">[[ formatDuration(item.uptime) ]]</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </a-tab-pane>
+
+                                        <!-- Bandwidth Chart -->
+                                        <a-tab-pane key="bwChart">
+                                            <template #tab>
+                                                <a-icon type="cloud"></a-icon>
+                                                <span>{{ i18n "pages.statistics.bandwidthChart" }}</span>
+                                            </template>
+                                            <div style="padding: 16px 0;">
+                                                <div v-if="bandwidthChartData.length === 0" class="text-center" style="padding: 40px; color: #999;">
+                                                    {{ i18n "pages.statistics.noData" }}
+                                                </div>
+                                                <div v-else>
+                                                    <div class="stats-chart-row" v-for="item in bandwidthChartData" :key="item.email">
+                                                        <div class="stats-chart-label" :title="item.email">[[ item.email ]]</div>
+                                                        <div class="stats-chart-bar-wrap">
+                                                            <div class="stats-chart-bar"
+                                                                :style="{ width: item.percent + '%', background: item.color }">
+                                                            </div>
+                                                        </div>
+                                                        <div class="stats-chart-value">[[ sizeFormat(item.usage) ]]</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </a-tab-pane>
+
+                                        <!-- Online Bandwidth -->
+                                        <a-tab-pane key="onlineBw">
+                                            <template #tab>
+                                                <a-icon type="dashboard"></a-icon>
+                                                <span>{{ i18n "pages.statistics.onlineBandwidth" }}</span>
+                                            </template>
+                                            <div style="padding: 16px 0;">
+                                                <div v-if="onlineStats.length === 0" class="text-center" style="padding: 40px; color: #999;">
+                                                    {{ i18n "pages.statistics.noOnlineClients" }}
+                                                </div>
+                                                <a-table v-else
+                                                    :columns="onlineBwColumns"
+                                                    :data-source="onlineStats"
+                                                    :row-key="record => record.email"
+                                                    :pagination="false"
+                                                    size="small"
+                                                    bordered>
+                                                    <template slot="bwUp" slot-scope="text, record">
+                                                        <span class="bw-cell">
+                                                            <a-icon type="arrow-up" style="color: #1890ff;" />
+                                                            [[ sizeFormat(record.currentBwUp) ]]/s
+                                                        </span>
+                                                    </template>
+                                                    <template slot="bwDown" slot-scope="text, record">
+                                                        <span class="bw-cell">
+                                                            <a-icon type="arrow-down" style="color: #52c41a;" />
+                                                            [[ sizeFormat(record.currentBwDown) ]]/s
+                                                        </span>
+                                                    </template>
+                                                    <template slot="bwTotal" slot-scope="text, record">
+                                                        <span class="bw-cell" style="font-weight: bold;">
+                                                            [[ sizeFormat(record.currentBwUp + record.currentBwDown) ]]/s
+                                                        </span>
+                                                    </template>
+                                                </a-table>
+                                            </div>
+                                        </a-tab-pane>
+                                    </a-tabs>
+                                </a-card>
+                            </a-col>
+                        </a-row>
+                    </template>
+                </transition>
+            </a-spin>
+        </a-layout-content>
+    </a-layout>
+</a-layout>
+
+{{ template "page/body_scripts" .}}
+{{ template "component/aSidebar" .}}
+{{ template "component/aThemeSwitch" .}}
+
+<script>
+    const app = new Vue({
+        delimiters: ['[[', ']]'],
+        el: '#app',
+        data: {
+            loading: false,
+            fetched: false,
+            searchText: '',
+            stats: [],
+            columns: [
+                {
+                    title: '{{ i18n "pages.statistics.colStatus" }}',
+                    key: 'status',
+                    width: 90,
+                    scopedSlots: { customRender: 'status' },
+                    sorter: (a, b) => (a.isOnline === b.isOnline ? 0 : a.isOnline ? -1 : 1),
+                    defaultSortOrder: 'ascend',
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colEmail" }}',
+                    dataIndex: 'email',
+                    key: 'email',
+                    sorter: (a, b) => a.email.localeCompare(b.email),
+                    ellipsis: true,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colUptime" }}',
+                    key: 'uptime',
+                    width: 130,
+                    scopedSlots: { customRender: 'uptime' },
+                    sorter: (a, b) => a.totalUptime - b.totalUptime,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colTotalUsage" }}',
+                    key: 'totalUsage',
+                    width: 120,
+                    scopedSlots: { customRender: 'totalUsage' },
+                    sorter: (a, b) => a.allTimeUsage - b.allTimeUsage,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colUpload" }}',
+                    key: 'upload',
+                    width: 100,
+                    scopedSlots: { customRender: 'upload' },
+                    sorter: (a, b) => a.totalUpload - b.totalUpload,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colDownload" }}',
+                    key: 'download',
+                    width: 100,
+                    scopedSlots: { customRender: 'download' },
+                    sorter: (a, b) => a.totalDownload - b.totalDownload,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colCurrentBw" }}',
+                    key: 'currentBw',
+                    width: 200,
+                    scopedSlots: { customRender: 'currentBw' },
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colLastOnline" }}',
+                    key: 'lastOnline',
+                    width: 140,
+                    scopedSlots: { customRender: 'lastOnline' },
+                    sorter: (a, b) => a.lastOnline - b.lastOnline,
+                },
+            ],
+            onlineBwColumns: [
+                {
+                    title: '{{ i18n "pages.statistics.colEmail" }}',
+                    dataIndex: 'email',
+                    key: 'email',
+                    ellipsis: true,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colUploadBw" }}',
+                    key: 'bwUp',
+                    width: 150,
+                    scopedSlots: { customRender: 'bwUp' },
+                    sorter: (a, b) => a.currentBwUp - b.currentBwUp,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colDownloadBw" }}',
+                    key: 'bwDown',
+                    width: 150,
+                    scopedSlots: { customRender: 'bwDown' },
+                    sorter: (a, b) => a.currentBwDown - b.currentBwDown,
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colTotalBw" }}',
+                    key: 'bwTotal',
+                    width: 150,
+                    scopedSlots: { customRender: 'bwTotal' },
+                    sorter: (a, b) => (a.currentBwUp + a.currentBwDown) - (b.currentBwUp + b.currentBwDown),
+                },
+            ],
+        },
+        computed: {
+            filteredStats() {
+                if (!this.searchText) return this.stats;
+                const s = this.searchText.toLowerCase();
+                return this.stats.filter(r => r.email.toLowerCase().includes(s));
+            },
+            onlineCount() {
+                return this.stats.filter(r => r.isOnline).length;
+            },
+            onlineStats() {
+                return this.stats.filter(r => r.isOnline).sort((a, b) =>
+                    (b.currentBwUp + b.currentBwDown) - (a.currentBwUp + a.currentBwDown));
+            },
+            totalBandwidthFormatted() {
+                const total = this.stats.reduce((sum, r) => sum + r.allTimeUsage, 0);
+                return this.sizeFormat(total);
+            },
+            avgUptimeFormatted() {
+                if (this.stats.length === 0) return '0s';
+                const avg = this.stats.reduce((sum, r) => sum + r.totalUptime, 0) / this.stats.length;
+                return this.formatDuration(Math.floor(avg));
+            },
+            uptimeChartData() {
+                const sorted = [...this.stats]
+                    .filter(r => r.totalUptime > 0)
+                    .sort((a, b) => b.totalUptime - a.totalUptime)
+                    .slice(0, 30);
+                if (sorted.length === 0) return [];
+                const max = sorted[0].totalUptime;
+                const colors = ['#1890ff', '#13c2c2', '#52c41a', '#faad14', '#f5222d', '#722ed1', '#eb2f96'];
+                return sorted.map((r, i) => ({
+                    email: r.email,
+                    uptime: r.totalUptime,
+                    percent: max > 0 ? Math.max((r.totalUptime / max) * 100, 1) : 0,
+                    color: colors[i % colors.length],
+                }));
+            },
+            bandwidthChartData() {
+                const sorted = [...this.stats]
+                    .filter(r => r.allTimeUsage > 0)
+                    .sort((a, b) => b.allTimeUsage - a.allTimeUsage)
+                    .slice(0, 30);
+                if (sorted.length === 0) return [];
+                const max = sorted[0].allTimeUsage;
+                const colors = ['#f5222d', '#fa541c', '#fa8c16', '#faad14', '#52c41a', '#1890ff', '#722ed1'];
+                return sorted.map((r, i) => ({
+                    email: r.email,
+                    usage: r.allTimeUsage,
+                    percent: max > 0 ? Math.max((r.allTimeUsage / max) * 100, 1) : 0,
+                    color: colors[i % colors.length],
+                }));
+            },
+        },
+        methods: {
+            sizeFormat(bytes) {
+                if (bytes === 0 || bytes === undefined) return '0 B';
+                const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+                let i = 0;
+                let size = bytes;
+                while (size >= 1024 && i < units.length - 1) {
+                    size /= 1024;
+                    i++;
+                }
+                return size.toFixed(i > 0 ? 2 : 0) + ' ' + units[i];
+            },
+            formatDuration(seconds) {
+                if (!seconds || seconds <= 0) return '0s';
+                const d = Math.floor(seconds / 86400);
+                const h = Math.floor((seconds % 86400) / 3600);
+                const m = Math.floor((seconds % 3600) / 60);
+                const s = seconds % 60;
+                let parts = [];
+                if (d > 0) parts.push(d + 'd');
+                if (h > 0) parts.push(h + 'h');
+                if (m > 0) parts.push(m + 'm');
+                if (s > 0 && d === 0) parts.push(s + 's');
+                return parts.join(' ') || '0s';
+            },
+            async fetchStats() {
+                this.loading = true;
+                try {
+                    const res = await axios.get('panel/api/statistics/stats');
+                    if (res.data.success) {
+                        this.stats = res.data.obj || [];
+                    } else {
+                        this.$message.error(res.data.msg || 'Failed to load statistics');
+                    }
+                } catch (e) {
+                    this.$message.error('Failed to load statistics');
+                } finally {
+                    this.loading = false;
+                    this.fetched = true;
+                }
+            },
+            async deleteStats() {
+                this.loading = true;
+                try {
+                    const res = await axios.post('panel/api/statistics/deleteStats');
+                    if (res.data.success) {
+                        this.$message.success(res.data.msg || '{{ i18n "pages.statistics.toasts.deleteStatsSuccess" }}');
+                        await this.fetchStats();
+                    } else {
+                        this.$message.error(res.data.msg || 'Failed to delete statistics');
+                    }
+                } catch (e) {
+                    this.$message.error('Failed to delete statistics');
+                } finally {
+                    this.loading = false;
+                }
+            },
+        },
+        async mounted() {
+            await this.fetchStats();
+            // Auto-refresh via WebSocket traffic events
+            if (window.wsClient) {
+                window.wsClient.on('traffic', (payload) => {
+                    // Re-fetch stats when traffic is updated (every 10s)
+                    this.fetchStats();
+                });
+            }
+        },
+    });
+</script>
+{{ template "page/body_end" .}}

@@ -153,11 +153,12 @@ const (
 // Tgbot provides business logic for Telegram bot integration.
 // It handles bot commands, user interactions, and status reporting via Telegram.
 type Tgbot struct {
-	inboundService InboundService
-	settingService SettingService
-	serverService  ServerService
-	xrayService    XrayService
-	lastStatus     *Status
+	inboundService    InboundService
+	settingService    SettingService
+	serverService     ServerService
+	xrayService       XrayService
+	statisticsService StatisticsService
+	lastStatus        *Status
 }
 
 // NewTgbot creates a new Tgbot instance.
@@ -332,6 +333,8 @@ func (t *Tgbot) Start(i18nFS embed.FS) error {
 			{Command: "help", Description: t.I18nBot("tgbot.commands.helpDesc")},
 			{Command: "status", Description: t.I18nBot("tgbot.commands.statusDesc")},
 			{Command: "id", Description: t.I18nBot("tgbot.commands.idDesc")},
+			{Command: "stats", Description: t.I18nBot("tgbot.commands.statsDesc")},
+			{Command: "clearstats", Description: t.I18nBot("tgbot.commands.clearStatsDesc")},
 		},
 	})
 	if err != nil {
@@ -795,6 +798,45 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 			} else {
 				handleUnknownCommand()
 				msg += t.I18nBot("tgbot.commands.restartUsage")
+			}
+		} else {
+			handleUnknownCommand()
+		}
+	case "stats":
+		onlyMessage = true
+		if isAdmin {
+			stats, err := t.statisticsService.GetUptimeStats()
+			if err != nil {
+				msg += t.I18nBot("tgbot.commands.statsFailed", "Error=="+err.Error())
+			} else if len(stats) == 0 {
+				msg += t.I18nBot("tgbot.commands.statsEmpty")
+			} else {
+				sort.Slice(stats, func(i, j int) bool {
+					return stats[i].TotalUptime > stats[j].TotalUptime
+				})
+				msg += t.I18nBot("tgbot.commands.statsHeader")
+				for i, s := range stats {
+					if i >= 20 {
+						msg += fmt.Sprintf("\r\n... and %d more", len(stats)-20)
+						break
+					}
+					d := s.TotalUptime / 86400
+					h := (s.TotalUptime % 86400) / 3600
+					m := (s.TotalUptime % 3600) / 60
+					msg += fmt.Sprintf("\r\n%d. <code>%s</code> — %dd %dh %dm", i+1, s.Email, d, h, m)
+				}
+			}
+		} else {
+			handleUnknownCommand()
+		}
+	case "clearstats":
+		onlyMessage = true
+		if isAdmin {
+			err := t.statisticsService.DeleteAllStats()
+			if err != nil {
+				msg += t.I18nBot("tgbot.commands.clearStatsFailed", "Error=="+err.Error())
+			} else {
+				msg += t.I18nBot("tgbot.commands.clearStatsSuccess")
 			}
 		} else {
 			handleUnknownCommand()
