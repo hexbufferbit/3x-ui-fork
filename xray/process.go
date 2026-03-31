@@ -70,6 +70,15 @@ func GetAccessPersistentPrevLogPath() string {
 
 // GetAccessLogPath reads the Xray config and returns the access log file path.
 func GetAccessLogPath() (string, error) {
+	return getConfiguredLogPath("access")
+}
+
+// GetErrorLogPath reads the Xray config and returns the error log file path.
+func GetErrorLogPath() (string, error) {
+	return getConfiguredLogPath("error")
+}
+
+func getConfiguredLogPath(kind string) (string, error) {
 	config, err := os.ReadFile(GetConfigPath())
 	if err != nil {
 		logger.Warningf("Failed to read configuration file: %s", err)
@@ -85,9 +94,9 @@ func GetAccessLogPath() (string, error) {
 
 	if jsonConfig["log"] != nil {
 		jsonLog := jsonConfig["log"].(map[string]any)
-		if jsonLog["access"] != nil {
-			accessLogPath := jsonLog["access"].(string)
-			return accessLogPath, nil
+		if jsonLog[kind] != nil {
+			logPath := jsonLog[kind].(string)
+			return logPath, nil
 		}
 	}
 	return "", err

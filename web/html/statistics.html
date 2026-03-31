@@ -264,7 +264,9 @@
                                                                     </template>
                                                                 </div>
                                                             </template>
-                                                            <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                            <span @mouseenter="loadIpInfo(ipEntry.ip)">
+                                                                <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                            </span>
                                                         </a-popover>
                                                     </template>
                                                     <span v-else style="color: #999;">-</span>
@@ -393,7 +395,9 @@
                                                                         </template>
                                                                     </div>
                                                                 </template>
-                                                                <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                                <span @mouseenter="loadIpInfo(ipEntry.ip)">
+                                                                    <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                                </span>
                                                             </a-popover>
                                                         </template>
                                                         <span v-else style="color: #999;">-</span>

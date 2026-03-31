@@ -3,9 +3,13 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"html"
+	"io"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,10 +17,11 @@ import (
 )
 
 const (
-	ipInfoCacheTTL      = 12 * time.Hour
-	ipInfoFailureTTL    = 10 * time.Minute
-	ipLookupTimeout     = 5 * time.Second
-	ipLookupServiceBase = "https://ipwho.is/"
+	ipInfoCacheTTL              = 12 * time.Hour
+	ipInfoFailureTTL            = 10 * time.Minute
+	ipLookupTimeout             = 5 * time.Second
+	whatIsMyIPAddressLookupBase = "https://whatismyipaddress.com/ip/"
+	ipWhoIsLookupBase           = "https://ipwho.is/"
 )
 
 type ClientIPInfo struct {
@@ -61,9 +66,12 @@ type ipInfoIOResponse struct {
 }
 
 var (
-	ipInfoCache   = map[string]cachedClientIPInfo{}
-	ipInfoCacheMu sync.RWMutex
-	ipHTTPClient  = &http.Client{Timeout: ipLookupTimeout}
+	ipInfoCache              = map[string]cachedClientIPInfo{}
+	ipInfoCacheMu            sync.RWMutex
+	ipHTTPClient             = &http.Client{Timeout: ipLookupTimeout}
+	htmlTagRegex             = regexp.MustCompile(`(?is)<[^>]+>`)
+	htmlWhitespaceRegex      = regexp.MustCompile(`\s+`)
+	ipDetailInformationRegex = regexp.MustCompile(`(?is)<p[^>]*class=["'][^"']*information[^"']*["'][^>]*>\s*<span>\s*([^<]+?)\s*</span>\s*<span>(.*?)</span>\s*</p>`)
 )
 
 func (s *StatisticsService) GetIPInfo(ip string) ClientIPInfo {
@@ -86,81 +94,30 @@ func (s *StatisticsService) GetIPInfo(ip string) ClientIPInfo {
 		return cached
 	}
 
-	lookupURL := ipLookupServiceBase + url.PathEscape(ip)
-	req, err := http.NewRequest(http.MethodGet, lookupURL, nil)
-	if err != nil {
-		return cacheIPInfo(ip, ClientIPInfo{
-			IP:      ip,
-			Message: "IP information unavailable",
-		}, ipInfoFailureTTL)
+	info, lookupErr := lookupIPInfoWithWhatIsMyIPAddress(ip)
+	if lookupErr == nil {
+		enrichMissingIPInfo(&info, ip, lookupIPInfoWithIPWhoIs, lookupIPInfoWithIPInfo)
+		return cacheIPInfo(ip, normalizeIPInfo(info, ip), ipInfoCacheTTL)
 	}
+	logger.Warning("IP lookup failed for", ip, "via whatismyipaddress.com:", lookupErr)
 
-	resp, err := ipHTTPClient.Do(req)
-	if err != nil {
-		logger.Warning("IP lookup failed for", ip, ":", err)
-		return cacheIPInfo(ip, ClientIPInfo{
-			IP:      ip,
-			Message: "IP information unavailable",
-		}, ipInfoFailureTTL)
+	info, lookupErr = lookupIPInfoWithIPWhoIs(ip)
+	if lookupErr == nil {
+		enrichMissingIPInfo(&info, ip, lookupIPInfoWithIPInfo)
+		return cacheIPInfo(ip, normalizeIPInfo(info, ip), ipInfoCacheTTL)
 	}
-	defer resp.Body.Close()
+	logger.Warning("IP lookup failed for", ip, "via ipwho.is:", lookupErr)
 
-	if resp.StatusCode != http.StatusOK {
-		logger.Warning("IP lookup returned status", resp.StatusCode, "for", ip)
-		return cacheIPInfo(ip, ClientIPInfo{
-			IP:      ip,
-			Message: fmt.Sprintf("IP information unavailable (status %d)", resp.StatusCode),
-		}, ipInfoFailureTTL)
+	info, lookupErr = lookupIPInfoWithIPInfo(ip)
+	if lookupErr == nil {
+		return cacheIPInfo(ip, normalizeIPInfo(info, ip), ipInfoCacheTTL)
 	}
+	logger.Warning("IP lookup failed for", ip, "via ipinfo.io:", lookupErr)
 
-	var payload ipWhoIsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
-		logger.Warning("IP lookup decode failed for", ip, ":", err)
-		return cacheIPInfo(ip, ClientIPInfo{
-			IP:      ip,
-			Message: "IP information unavailable",
-		}, ipInfoFailureTTL)
-	}
-
-	if !payload.Success {
-		message := payload.Message
-		if message == "" {
-			message = "IP information unavailable"
-		}
-		info, fallbackErr := lookupIPInfoWithIPInfo(ip)
-		if fallbackErr == nil {
-			return cacheIPInfo(ip, info, ipInfoCacheTTL)
-		}
-		return cacheIPInfo(ip, ClientIPInfo{
-			IP:      ip,
-			Message: message,
-		}, ipInfoFailureTTL)
-	}
-
-	info := ClientIPInfo{
-		IP:           payload.IP,
-		ISP:          payload.Connection.ISP,
-		Organization: payload.Connection.Org,
-		City:         payload.City,
-		Region:       payload.Region,
-		Country:      payload.Country,
-		Timezone:     payload.Timezone.ID,
-	}
-	if info.IP == "" {
-		info.IP = ip
-	}
-	if info.ISP == "" || info.Organization == "" || info.City == "" || info.Region == "" || info.Country == "" || info.Timezone == "" {
-		fillIPInfoFromFallback(&info, ip)
-	}
-
-	if info.ISP == "" && info.Organization != "" {
-		info.ISP = info.Organization
-	}
-	if info.Organization == "" && info.ISP != "" {
-		info.Organization = info.ISP
-	}
-
-	return cacheIPInfo(ip, info, ipInfoCacheTTL)
+	return cacheIPInfo(ip, ClientIPInfo{
+		IP:      ip,
+		Message: "IP information unavailable",
+	}, ipInfoFailureTTL)
 }
 
 func getCachedIPInfo(ip string) (ClientIPInfo, bool) {
@@ -196,33 +153,186 @@ func shouldLookupPublicIP(addr netip.Addr) bool {
 	return true
 }
 
-func fillIPInfoFromFallback(info *ClientIPInfo, ip string) {
-	fallback, err := lookupIPInfoWithIPInfo(ip)
+func enrichMissingIPInfo(info *ClientIPInfo, ip string, lookups ...func(string) (ClientIPInfo, error)) {
+	for _, lookup := range lookups {
+		if !needsIPInfoEnrichment(*info) {
+			return
+		}
+
+		fallback, err := lookup(ip)
+		if err != nil {
+			continue
+		}
+
+		if info.IP == "" {
+			info.IP = fallback.IP
+		}
+		if info.ISP == "" {
+			info.ISP = fallback.ISP
+		}
+		if info.Organization == "" {
+			info.Organization = fallback.Organization
+		}
+		if info.City == "" {
+			info.City = fallback.City
+		}
+		if info.Region == "" {
+			info.Region = fallback.Region
+		}
+		if info.Country == "" {
+			info.Country = fallback.Country
+		}
+		if info.Timezone == "" {
+			info.Timezone = fallback.Timezone
+		}
+	}
+}
+
+func needsIPInfoEnrichment(info ClientIPInfo) bool {
+	return info.ISP == "" || info.Organization == "" || info.City == "" || info.Region == "" || info.Country == "" || info.Timezone == ""
+}
+
+func normalizeIPInfo(info ClientIPInfo, ip string) ClientIPInfo {
+	if info.IP == "" {
+		info.IP = ip
+	}
+	if info.ISP == "" && info.Organization != "" {
+		info.ISP = info.Organization
+	}
+	if info.Organization == "" && info.ISP != "" {
+		info.Organization = info.ISP
+	}
+	return info
+}
+
+func lookupIPInfoWithWhatIsMyIPAddress(ip string) (ClientIPInfo, error) {
+	req, err := newBrowserLikeRequest(http.MethodGet, whatIsMyIPAddressLookupBase+url.PathEscape(ip))
 	if err != nil {
-		return
+		return ClientIPInfo{}, err
 	}
 
-	if info.IP == "" {
-		info.IP = fallback.IP
+	resp, err := ipHTTPClient.Do(req)
+	if err != nil {
+		return ClientIPInfo{}, err
 	}
-	if info.ISP == "" {
-		info.ISP = fallback.ISP
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ClientIPInfo{}, fmt.Errorf("whatismyipaddress status %d", resp.StatusCode)
 	}
-	if info.Organization == "" {
-		info.Organization = fallback.Organization
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ClientIPInfo{}, err
 	}
-	if info.City == "" {
-		info.City = fallback.City
+
+	fields := parseWhatIsMyIPAddressFields(string(body))
+	info := ClientIPInfo{
+		IP:           firstNonEmpty(fields["Hostname"], fields["IP"], ip),
+		ISP:          fields["ISP"],
+		Organization: fields["ISP"],
+		City:         fields["City"],
+		Region:       fields["State/Region"],
+		Country:      fields["Country"],
 	}
-	if info.Region == "" {
-		info.Region = fallback.Region
+
+	if info.ISP == "" && info.City == "" && info.Region == "" && info.Country == "" {
+		return ClientIPInfo{}, fmt.Errorf("whatismyipaddress returned no IP details")
 	}
-	if info.Country == "" {
-		info.Country = fallback.Country
+
+	return info, nil
+}
+
+func newBrowserLikeRequest(method, lookupURL string) (*http.Request, error) {
+	req, err := http.NewRequest(method, lookupURL, nil)
+	if err != nil {
+		return nil, err
 	}
-	if info.Timezone == "" {
-		info.Timezone = fallback.Timezone
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Cache-Control", "no-cache")
+	req.Header.Set("Pragma", "no-cache")
+	req.Header.Set("Sec-Fetch-Dest", "document")
+	req.Header.Set("Sec-Fetch-Mode", "navigate")
+	req.Header.Set("Sec-Fetch-Site", "none")
+	req.Header.Set("Sec-Fetch-User", "?1")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	return req, nil
+}
+
+func parseWhatIsMyIPAddressFields(page string) map[string]string {
+	fields := map[string]string{}
+	for _, match := range ipDetailInformationRegex.FindAllStringSubmatch(page, -1) {
+		if len(match) < 3 {
+			continue
+		}
+		label := normalizeHTMLText(strings.TrimSuffix(match[1], ":"))
+		value := normalizeHTMLText(match[2])
+		if label == "" || value == "" {
+			continue
+		}
+		fields[label] = value
 	}
+	return fields
+}
+
+func normalizeHTMLText(value string) string {
+	value = htmlTagRegex.ReplaceAllString(value, " ")
+	value = html.UnescapeString(value)
+	value = strings.ReplaceAll(value, "\u00a0", " ")
+	value = htmlWhitespaceRegex.ReplaceAllString(value, " ")
+	return strings.TrimSpace(value)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func lookupIPInfoWithIPWhoIs(ip string) (ClientIPInfo, error) {
+	req, err := http.NewRequest(http.MethodGet, ipWhoIsLookupBase+url.PathEscape(ip), nil)
+	if err != nil {
+		return ClientIPInfo{}, err
+	}
+
+	resp, err := ipHTTPClient.Do(req)
+	if err != nil {
+		return ClientIPInfo{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return ClientIPInfo{}, fmt.Errorf("ipwho status %d", resp.StatusCode)
+	}
+
+	var payload ipWhoIsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return ClientIPInfo{}, err
+	}
+
+	if !payload.Success {
+		message := payload.Message
+		if message == "" {
+			message = "IP information unavailable"
+		}
+		return ClientIPInfo{}, fmt.Errorf("%s", message)
+	}
+
+	return ClientIPInfo{
+		IP:           payload.IP,
+		ISP:          payload.Connection.ISP,
+		Organization: payload.Connection.Org,
+		City:         payload.City,
+		Region:       payload.Region,
+		Country:      payload.Country,
+		Timezone:     payload.Timezone.ID,
+	}, nil
 }
 
 func lookupIPInfoWithIPInfo(ip string) (ClientIPInfo, error) {

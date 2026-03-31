@@ -1,6 +1,10 @@
 package service
 
 import (
+	"errors"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v2/database"
@@ -136,7 +140,25 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 // DeleteAllStats hard-deletes all uptime statistics records.
 func (s *StatisticsService) DeleteAllStats() error {
 	db := database.GetDB()
-	return db.Where("1 = 1").Delete(&model.ClientUptimeStat{}).Error
+	tx := db.Begin()
+	if err := tx.Where("1 = 1").Delete(&model.ClientUptimeStat{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Where("1 = 1").Delete(&model.InboundClientIps{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	return errors.Join(
+		clearConfiguredLogFile(xray.GetAccessLogPath),
+		clearConfiguredLogFile(xray.GetErrorLogPath),
+		truncateFileIfExists(xray.GetAccessPersistentLogPath()),
+		truncateFileIfExists(xray.GetAccessPersistentPrevLogPath()),
+	)
 }
 
 // GetUptimeStats returns only uptime data for all clients (for bot/lightweight queries).
@@ -148,4 +170,32 @@ func (s *StatisticsService) GetUptimeStats() ([]model.ClientUptimeStat, error) {
 		return nil, err
 	}
 	return stats, nil
+}
+
+func clearConfiguredLogFile(getPath func() (string, error)) error {
+	path, err := getPath()
+	if err != nil {
+		return err
+	}
+	return truncateFileIfExists(path)
+}
+
+func truncateFileIfExists(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" || strings.EqualFold(path, "none") {
+		return nil
+	}
+
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s is a directory", path)
+	}
+
+	return os.Truncate(path, 0)
 }
