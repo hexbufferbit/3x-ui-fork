@@ -811,6 +811,10 @@ install_x-ui() {
         else
             systemctl stop x-ui
         fi
+        # Backup database before removing old installation
+        if [[ -f ${xui_folder}/x-ui.db ]]; then
+            cp -f ${xui_folder}/x-ui.db /tmp/x-ui-db-backup.db
+        fi
         rm ${xui_folder}/ -rf
     fi
     
@@ -834,6 +838,11 @@ install_x-ui() {
     cp -rf x-ui/. ${xui_folder}/
     rm -rf x-ui/
     cd ${xui_folder}
+    
+    # Restore database backup if it exists
+    if [[ -f /tmp/x-ui-db-backup.db ]]; then
+        mv -f /tmp/x-ui-db-backup.db ${xui_folder}/x-ui.db
+    fi
     
     # Update x-ui cli and se set permission
     mv -f /usr/bin/x-ui-temp /usr/bin/x-ui
