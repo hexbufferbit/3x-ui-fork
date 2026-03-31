@@ -506,6 +506,12 @@
 "statsOutboundUplinkDesc" = "Enables the statistics collection for upstream traffic of all outbound proxies."
 "statsOutboundDownlink" = "Outbound Download Statistics"
 "statsOutboundDownlinkDesc" = "Enables the statistics collection for downstream traffic of all outbound proxies."
+"logs" = "Logs"
+"logsPause" = "Pause"
+"logsResume" = "Resume"
+"logsClear" = "Clear"
+"logsEntries" = "entries"
+"logsEmpty" = "No log entries to display. Logs will appear here in real-time."
 
 [pages.xray.rules]
 "first" = "First"

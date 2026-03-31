@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v2/logger"
+	"github.com/mhsanaei/3x-ui/v2/web/websocket"
 )
 
 // NewLogWriter returns a new LogWriter for processing Xray log output.
@@ -56,24 +57,31 @@ func (lw *LogWriter) Write(m []byte) (n int, err error) {
 			if strings.Contains(msgBodyLower, "tls handshake error") ||
 				strings.Contains(msgBodyLower, "connection ends") {
 				logger.Debug("XRAY: " + msgBody)
+				websocket.BroadcastXrayLog("Debug", msgBody)
 				lw.lastLine = ""
 				continue
 			}
 
 			if strings.Contains(msgBodyLower, "failed") {
 				logger.Error("XRAY: " + msgBody)
+				websocket.BroadcastXrayLog("Error", msgBody)
 			} else {
 				switch level {
 				case "Debug":
 					logger.Debug("XRAY: " + msgBody)
+					websocket.BroadcastXrayLog("Debug", msgBody)
 				case "Info":
 					logger.Info("XRAY: " + msgBody)
+					websocket.BroadcastXrayLog("Info", msgBody)
 				case "Warning":
 					logger.Warning("XRAY: " + msgBody)
+					websocket.BroadcastXrayLog("Warning", msgBody)
 				case "Error":
 					logger.Error("XRAY: " + msgBody)
+					websocket.BroadcastXrayLog("Error", msgBody)
 				default:
 					logger.Debug("XRAY: " + msg)
+					websocket.BroadcastXrayLog("Debug", msg)
 				}
 			}
 			lw.lastLine = ""
@@ -83,14 +91,17 @@ func (lw *LogWriter) Write(m []byte) (n int, err error) {
 			if strings.Contains(msgLower, "tls handshake error") ||
 				strings.Contains(msgLower, "connection ends") {
 				logger.Debug("XRAY: " + msg)
+				websocket.BroadcastXrayLog("Debug", msg)
 				lw.lastLine = msg
 				continue
 			}
 
 			if strings.Contains(msgLower, "failed") {
 				logger.Error("XRAY: " + msg)
+				websocket.BroadcastXrayLog("Error", msg)
 			} else {
 				logger.Debug("XRAY: " + msg)
+				websocket.BroadcastXrayLog("Debug", msg)
 			}
 			lw.lastLine = msg
 		}

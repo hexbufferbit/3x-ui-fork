@@ -130,6 +130,63 @@
                   </template>
                   {{ template "settings/xray/advanced" . }}
                 </a-tab-pane>
+                <a-tab-pane key="tpl-logs">
+                  <template #tab>
+                    <a-icon type="file-text"></a-icon>
+                    <span>{{ i18n "pages.xray.logs" }}</span>
+                    <a-badge v-if="xrayLogsPaused" dot :style="{ marginLeft: '4px' }"></a-badge>
+                  </template>
+                  <div :style="{ paddingTop: '10px' }">
+                    <a-space direction="horizontal" :style="{ marginBottom: '10px', flexWrap: 'wrap' }">
+                      <a-select v-model="xrayLogsLevel" :style="{ width: '120px' }" @change="loadInitialLogs">
+                        <a-select-option value="debug">Debug</a-select-option>
+                        <a-select-option value="info">Info</a-select-option>
+                        <a-select-option value="warning">Warning</a-select-option>
+                        <a-select-option value="error">Error</a-select-option>
+                      </a-select>
+                      <a-input-search
+                        v-model="xrayLogsFilter"
+                        placeholder='{{ i18n "search" }}'
+                        :style="{ width: '200px' }"
+                        allow-clear />
+                      <a-button @click="xrayLogsPaused = !xrayLogsPaused"
+                        :type="xrayLogsPaused ? 'primary' : 'default'">
+                        <a-icon :type="xrayLogsPaused ? 'play-circle' : 'pause-circle'"></a-icon>
+                        [[ xrayLogsPaused ? '{{ i18n "pages.xray.logsResume" }}' : '{{ i18n "pages.xray.logsPause" }}' ]]
+                      </a-button>
+                      <a-button @click="clearXrayLogs" type="danger" ghost>
+                        <a-icon type="delete"></a-icon>
+                        {{ i18n "pages.xray.logsClear" }}
+                      </a-button>
+                      <a-tag color="green">[[ filteredXrayLogs.length ]] {{ i18n "pages.xray.logsEntries" }}</a-tag>
+                    </a-space>
+                    <div ref="xrayLogsContainer" :style="{
+                      background: isDarkTheme ? '#1a1a2e' : '#f5f5f5',
+                      border: '1px solid ' + (isDarkTheme ? '#333' : '#d9d9d9'),
+                      borderRadius: '4px',
+                      height: '65vh',
+                      overflowY: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: '12px',
+                      padding: '8px',
+                    }">
+                      <div v-for="(log, index) in filteredXrayLogs" :key="index" :style="{
+                        padding: '2px 4px',
+                        borderBottom: '1px solid ' + (isDarkTheme ? '#2a2a3e' : '#eee'),
+                        color: logLevelColor(log.level),
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                      }">
+                        <span :style="{ color: isDarkTheme ? '#888' : '#999', marginRight: '8px' }">[[ log.time ]]</span>
+                        <a-tag :color="logLevelTagColor(log.level)" size="small" :style="{ fontSize: '10px', lineHeight: '16px', marginRight: '8px' }">[[ log.level ]]</a-tag>
+                        <span>[[ log.message ]]</span>
+                      </div>
+                      <div v-if="filteredXrayLogs.length === 0" :style="{ textAlign: 'center', padding: '40px', color: '#999' }">
+                        {{ i18n "pages.xray.logsEmpty" }}
+                      </div>
+                    </div>
+                  </div>
+                </a-tab-pane>
               </a-tabs>
             </a-col>
           </a-row>
@@ -264,6 +321,11 @@
       showAlert: false,
       advSettings: 'xraySetting',
       obsSettings: '',
+      xrayLogs: [],
+      xrayLogsLevel: 'info',
+      xrayLogsFilter: '',
+      xrayLogsPaused: false,
+      xrayLogsMaxEntries: 2000,
       cm: null,
       cmOptions: {
         lineNumbers: true,
@@ -445,9 +507,60 @@
           this.saveBtnDisable = true;
         }
       },
+      async loadInitialLogs() {
+        const msg = await HttpUtil.post("/panel/api/server/logs/500", { level: this.xrayLogsLevel, syslog: "false" });
+        if (msg.success && msg.obj) {
+          const logs = Array.isArray(msg.obj) ? msg.obj : [];
+          this.xrayLogs = logs.filter(l => l.includes("XRAY:")).map(line => {
+            const match = line.match(/^(\S+ \S+)\s+(\S+)\s+-\s+XRAY:\s*(.*)$/);
+            if (match) {
+              return { time: match[1], level: match[2], message: match[3] };
+            }
+            return { time: '', level: 'DEBUG', message: line };
+          }).reverse();
+        }
+      },
+      addXrayLog(level, message) {
+        if (this.xrayLogsPaused) return;
+        const now = new Date();
+        const time = now.getFullYear() + '/' +
+          String(now.getMonth()+1).padStart(2,'0') + '/' +
+          String(now.getDate()).padStart(2,'0') + ' ' +
+          String(now.getHours()).padStart(2,'0') + ':' +
+          String(now.getMinutes()).padStart(2,'0') + ':' +
+          String(now.getSeconds()).padStart(2,'0');
+        this.xrayLogs.push({ time, level, message });
+        if (this.xrayLogs.length > this.xrayLogsMaxEntries) {
+          this.xrayLogs = this.xrayLogs.slice(-this.xrayLogsMaxEntries);
+        }
+        this.$nextTick(() => {
+          const container = this.$refs.xrayLogsContainer;
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        });
+      },
+      clearXrayLogs() {
+        this.xrayLogs = [];
+      },
+      logLevelColor(level) {
+        const l = (level || '').toUpperCase();
+        if (l === 'ERROR') return '#ff4d4f';
+        if (l === 'WARNING') return '#faad14';
+        if (l === 'INFO') return this.isDarkTheme ? '#69c0ff' : '#1890ff';
+        return this.isDarkTheme ? '#aaa' : '#666';
+      },
+      logLevelTagColor(level) {
+        const l = (level || '').toUpperCase();
+        if (l === 'ERROR') return 'red';
+        if (l === 'WARNING') return 'orange';
+        if (l === 'INFO') return 'blue';
+        return 'default';
+      },
       changePage(pageKey) {
         if (pageKey == 'tpl-advanced') this.changeCode();
         if (pageKey == 'tpl-balancer') this.changeObsCode();
+        if (pageKey == 'tpl-logs') this.loadInitialLogs();
       },
       syncRulesWithOutbound(tag, setting) {
         const newTemplateSettings = this.templateSettings;
@@ -1075,6 +1188,11 @@
               this.$forceUpdate();
             }
           });
+          window.wsClient.on('xray_log', (payload) => {
+            if (payload && payload.message) {
+              this.addXrayLog(payload.level || 'Debug', payload.message);
+            }
+          });
       }
 
       while (true) {
@@ -1083,6 +1201,17 @@
       }
     },
     computed: {
+      filteredXrayLogs() {
+        const levelOrder = { 'ERROR': 0, 'WARNING': 1, 'INFO': 2, 'DEBUG': 3 };
+        const maxLevel = levelOrder[(this.xrayLogsLevel || 'info').toUpperCase()] ?? 3;
+        const filter = (this.xrayLogsFilter || '').toLowerCase();
+        return this.xrayLogs.filter(log => {
+          const logLevel = levelOrder[(log.level || 'DEBUG').toUpperCase()] ?? 3;
+          if (logLevel > maxLevel) return false;
+          if (filter && !log.message.toLowerCase().includes(filter)) return false;
+          return true;
+        });
+      },
       templateSettings: {
         get: function () {
           const parsedSettings = this.xraySetting ? JSON.parse(this.xraySetting) : null;

@@ -80,3 +80,15 @@ func BroadcastXrayState(state string, errorMsg string) {
 		hub.Broadcast(MessageTypeXrayState, stateUpdate)
 	}
 }
+
+// BroadcastXrayLog broadcasts a single Xray log entry to all connected clients
+func BroadcastXrayLog(level string, message string) {
+	hub := GetHub()
+	if hub != nil {
+		logEntry := map[string]string{
+			"level":   level,
+			"message": message,
+		}
+		hub.Broadcast(MessageTypeXrayLog, logEntry)
+	}
+}
