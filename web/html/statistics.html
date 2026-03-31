@@ -1,5 +1,11 @@
 {{ template "page/head_start" .}}
 <style>
+    .dark .ant-statistic-content {
+        color: var(--dark-color-text-primary);
+    }
+    .dark .ant-statistic-title {
+        color: rgba(255, 255, 255, 0.55);
+    }
     .stats-bar-container {
         display: flex;
         align-items: center;
@@ -34,6 +40,9 @@
         overflow: hidden;
         position: relative;
     }
+    .dark .stats-chart-bar-wrap {
+        background: rgba(255,255,255,0.06);
+    }
     .stats-chart-bar {
         height: 100%;
         border-radius: 4px;
@@ -63,6 +72,10 @@
     .bw-cell {
         font-family: monospace;
         font-size: 12px;
+    }
+    .ip-tag {
+        font-size: 11px;
+        margin: 1px 2px;
     }
 </style>
 {{ template "page/head_end" .}}
@@ -152,7 +165,7 @@
                                                 :data-source="filteredStats"
                                                 :row-key="record => record.email"
                                                 :pagination="{ pageSize: 20, showSizeChanger: true, pageSizeOptions: ['10','20','50','100'] }"
-                                                :scroll="{ x: 900 }"
+                                                :scroll="{ x: 1100 }"
                                                 size="small"
                                                 bordered>
                                                 <template slot="status" slot-scope="text, record">
@@ -186,6 +199,12 @@
                                                         [[ moment(record.lastOnline).fromNow() ]]
                                                     </span>
                                                     <span v-else style="color: #999;">{{ i18n "pages.statistics.never" }}</span>
+                                                </template>
+                                                <template slot="ips" slot-scope="text, record">
+                                                    <template v-if="record.ips && record.ips.length > 0">
+                                                        <a-tag class="ip-tag" v-for="ip in record.ips" :key="ip">[[ ip ]]</a-tag>
+                                                    </template>
+                                                    <span v-else style="color: #999;">-</span>
                                                 </template>
                                             </a-table>
                                         </a-tab-pane>
@@ -356,6 +375,12 @@
                     scopedSlots: { customRender: 'lastOnline' },
                     sorter: (a, b) => a.lastOnline - b.lastOnline,
                 },
+                {
+                    title: '{{ i18n "pages.statistics.colIPs" }}',
+                    key: 'ips',
+                    width: 200,
+                    scopedSlots: { customRender: 'ips' },
+                },
             ],
             onlineBwColumns: [
                 {
@@ -391,7 +416,10 @@
             filteredStats() {
                 if (!this.searchText) return this.stats;
                 const s = this.searchText.toLowerCase();
-                return this.stats.filter(r => r.email.toLowerCase().includes(s));
+                return this.stats.filter(r =>
+                    r.email.toLowerCase().includes(s) ||
+                    (r.ips && r.ips.some(ip => ip.includes(s)))
+                );
             },
             onlineCount() {
                 return this.stats.filter(r => r.isOnline).length;

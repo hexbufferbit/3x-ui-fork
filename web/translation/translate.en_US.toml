@@ -639,6 +639,18 @@
 "lastOnline" = "Last Online"
 "online" = "Online"
 "offline" = "Offline"
+"colStatus" = "Status"
+"colEmail" = "Email"
+"colUptime" = "Uptime"
+"colTotalUsage" = "Total Usage"
+"colUpload" = "Upload"
+"colDownload" = "Download"
+"colCurrentBw" = "Current BW"
+"colLastOnline" = "Last Online"
+"colIPs" = "IPs"
+"colUploadBw" = "Upload"
+"colDownloadBw" = "Download"
+"colTotalBw" = "Total"
 
 [pages.statistics.toasts]
 "getStatsFail" = "Failed to get statistics"
@@ -702,7 +714,7 @@
 "status" = "✅ Bot is OK!"
 "usage" = "❗ Please provide a text to search!"
 "getID" = "🆔 Your ID: <code>{{ .ID }}</code>"
-"helpAdminCommands" = "To restart Xray Core:\r\n<code>/restart</code>\r\n\r\nTo search for a client email:\r\n<code>/usage [Email]</code>\r\n\r\nTo search for inbounds (with client stats):\r\n<code>/inbound [Remark]</code>\r\n\r\nTo view client uptime statistics:\r\n<code>/stats</code>\r\n\r\nTo delete all uptime statistics:\r\n<code>/clearstats</code>\r\n\r\nTelegram Chat ID:\r\n<code>/id</code>"
+"helpAdminCommands" = "To restart Xray Core:\r\n<code>/restart</code>\r\n\r\nTo search for a client email:\r\n<code>/usage [Email]</code>\r\n\r\nTo search for inbounds (with client stats):\r\n<code>/inbound [Remark]</code>\r\n\r\nTelegram Chat ID:\r\n<code>/id</code>"
 "helpClientCommands" = "To search for statistics, use the following command:\r\n\r\n<code>/usage [Email]</code>\r\n\r\nTelegram Chat ID:\r\n<code>/id</code>"
 "restartUsage" = "\r\n\r\n<code>/restart</code>"
 "restartSuccess" = "✅ Operation successful!"
@@ -834,6 +846,8 @@
 "change_comment" = "⚙️💬 Comment"
 "ResetAllTraffics" = "Reset All Traffics"
 "SortedTrafficUsageReport" = "Sorted Traffic Usage Report"
+"uptimeStats" = "📊 Uptime Stats"
+"clearStats" = "🗑 Clear Stats"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Operation successful!"

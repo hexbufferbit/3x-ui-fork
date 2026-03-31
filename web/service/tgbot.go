@@ -333,8 +333,7 @@ func (t *Tgbot) Start(i18nFS embed.FS) error {
 			{Command: "help", Description: t.I18nBot("tgbot.commands.helpDesc")},
 			{Command: "status", Description: t.I18nBot("tgbot.commands.statusDesc")},
 			{Command: "id", Description: t.I18nBot("tgbot.commands.idDesc")},
-			{Command: "stats", Description: t.I18nBot("tgbot.commands.statsDesc")},
-			{Command: "clearstats", Description: t.I18nBot("tgbot.commands.clearStatsDesc")},
+
 		},
 	})
 	if err != nil {
@@ -798,45 +797,6 @@ func (t *Tgbot) answerCommand(message *telego.Message, chatId int64, isAdmin boo
 			} else {
 				handleUnknownCommand()
 				msg += t.I18nBot("tgbot.commands.restartUsage")
-			}
-		} else {
-			handleUnknownCommand()
-		}
-	case "stats":
-		onlyMessage = true
-		if isAdmin {
-			stats, err := t.statisticsService.GetUptimeStats()
-			if err != nil {
-				msg += t.I18nBot("tgbot.commands.statsFailed", "Error=="+err.Error())
-			} else if len(stats) == 0 {
-				msg += t.I18nBot("tgbot.commands.statsEmpty")
-			} else {
-				sort.Slice(stats, func(i, j int) bool {
-					return stats[i].TotalUptime > stats[j].TotalUptime
-				})
-				msg += t.I18nBot("tgbot.commands.statsHeader")
-				for i, s := range stats {
-					if i >= 20 {
-						msg += fmt.Sprintf("\r\n... and %d more", len(stats)-20)
-						break
-					}
-					d := s.TotalUptime / 86400
-					h := (s.TotalUptime % 86400) / 3600
-					m := (s.TotalUptime % 3600) / 60
-					msg += fmt.Sprintf("\r\n%d. <code>%s</code> — %dd %dh %dm", i+1, s.Email, d, h, m)
-				}
-			}
-		} else {
-			handleUnknownCommand()
-		}
-	case "clearstats":
-		onlyMessage = true
-		if isAdmin {
-			err := t.statisticsService.DeleteAllStats()
-			if err != nil {
-				msg += t.I18nBot("tgbot.commands.clearStatsFailed", "Error=="+err.Error())
-			} else {
-				msg += t.I18nBot("tgbot.commands.clearStatsSuccess")
 			}
 		} else {
 			handleUnknownCommand()
@@ -1851,6 +1811,40 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 	case "onlines_refresh":
 		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.answers.successfulOperation"))
 		t.onlineClients(chatId, callbackQuery.Message.GetMessageID())
+	case "get_uptime_stats":
+		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.uptimeStats"))
+		stats, err := t.statisticsService.GetUptimeStats()
+		if err != nil {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.statsFailed", "Error=="+err.Error()))
+			return
+		}
+		if len(stats) == 0 {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.statsEmpty"))
+			return
+		}
+		sort.Slice(stats, func(i, j int) bool {
+			return stats[i].TotalUptime > stats[j].TotalUptime
+		})
+		msg := t.I18nBot("tgbot.commands.statsHeader")
+		for i, s := range stats {
+			if i >= 20 {
+				msg += fmt.Sprintf("\r\n... and %d more", len(stats)-20)
+				break
+			}
+			d := s.TotalUptime / 86400
+			h := (s.TotalUptime % 86400) / 3600
+			m := (s.TotalUptime % 3600) / 60
+			msg += fmt.Sprintf("\r\n%d. <code>%s</code> — %dd %dh %dm", i+1, s.Email, d, h, m)
+		}
+		t.SendMsgToTgbot(chatId, msg)
+	case "clear_uptime_stats":
+		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.clearStats"))
+		err := t.statisticsService.DeleteAllStats()
+		if err != nil {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.clearStatsFailed", "Error=="+err.Error()))
+		} else {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.clearStatsSuccess"))
+		}
 	case "commands":
 		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.commands"))
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.helpAdminCommands"))
@@ -2360,7 +2354,10 @@ func (t *Tgbot) SendAnswer(chatId int64, msg string, isAdmin bool) {
 			tu.InlineKeyboardButton(t.I18nBot("subscription.individualLinks")).WithCallbackData(t.encodeQuery("admin_client_individual_links")),
 			tu.InlineKeyboardButton(t.I18nBot("qrCode")).WithCallbackData(t.encodeQuery("admin_client_qr_links")),
 		),
-		// TODOOOOOOOOOOOOOO: Add restart button here.
+		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.uptimeStats")).WithCallbackData(t.encodeQuery("get_uptime_stats")),
+			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.clearStats")).WithCallbackData(t.encodeQuery("clear_uptime_stats")),
+		),
 	)
 	numericKeyboardClient := tu.InlineKeyboard(
 		tu.InlineKeyboardRow(

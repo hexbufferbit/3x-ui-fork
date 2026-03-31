@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v2/database"
@@ -16,15 +17,16 @@ type StatisticsService struct{}
 
 // ClientStatResult holds aggregated statistics for a single client for the API response.
 type ClientStatResult struct {
-	Email         string `json:"email"`
-	TotalUptime   int64  `json:"totalUptime"`   // seconds
-	TotalUpload   int64  `json:"totalUpload"`    // bytes (allTime up)
-	TotalDownload int64  `json:"totalDownload"`  // bytes (allTime down)
-	AllTimeUsage  int64  `json:"allTimeUsage"`   // bytes
-	IsOnline      bool   `json:"isOnline"`
-	CurrentBwUp   int64  `json:"currentBwUp"`    // bytes/sec
-	CurrentBwDown int64  `json:"currentBwDown"`  // bytes/sec
-	LastOnline    int64  `json:"lastOnline"`     // unix ms
+	Email         string   `json:"email"`
+	TotalUptime   int64    `json:"totalUptime"`   // seconds
+	TotalUpload   int64    `json:"totalUpload"`   // bytes (allTime up)
+	TotalDownload int64    `json:"totalDownload"` // bytes (allTime down)
+	AllTimeUsage  int64    `json:"allTimeUsage"`  // bytes
+	IsOnline      bool     `json:"isOnline"`
+	CurrentBwUp   int64    `json:"currentBwUp"`   // bytes/sec
+	CurrentBwDown int64    `json:"currentBwDown"` // bytes/sec
+	LastOnline    int64    `json:"lastOnline"`    // unix ms
+	IPs           []string `json:"ips"`           // client IP addresses
 }
 
 // RecordOnlineClients increments uptime for all currently online clients.
@@ -43,7 +45,7 @@ func (s *StatisticsService) RecordOnlineClients(onlineClients []string, interval
 			LastUpdated: now,
 		}
 		err := db.Clauses(clause.OnConflict{
-			Columns:   []clause.Column{{Name: "email"}},
+			Columns: []clause.Column{{Name: "email"}},
 			DoUpdates: clause.Assignments(map[string]any{
 				"total_uptime": gorm.Expr("total_uptime + ?", intervalSec),
 				"last_updated": now,
@@ -88,8 +90,26 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 	bwDownMap := make(map[string]int64)
 	if clientTrafficDeltas != nil {
 		for _, ct := range clientTrafficDeltas {
-			bwUpMap[ct.Email] = ct.Up   // bytes in last 10s interval
+			bwUpMap[ct.Email] = ct.Up // bytes in last 10s interval
 			bwDownMap[ct.Email] = ct.Down
+		}
+	}
+
+	// Build client IP map
+	var clientIps []model.InboundClientIps
+	db.Find(&clientIps)
+	type ipEntry struct {
+		IP string `json:"ip"`
+	}
+	ipMap := make(map[string][]string, len(clientIps))
+	for _, cip := range clientIps {
+		var entries []ipEntry
+		if err := json.Unmarshal([]byte(cip.Ips), &entries); err == nil {
+			ips := make([]string, 0, len(entries))
+			for _, e := range entries {
+				ips = append(ips, e.IP)
+			}
+			ipMap[cip.ClientEmail] = ips
 		}
 	}
 
@@ -104,6 +124,7 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 			AllTimeUsage:  ct.AllTime,
 			IsOnline:      onlineSet[ct.Email],
 			LastOnline:    ct.LastOnline,
+			IPs:           ipMap[ct.Email],
 		}
 		// Compute bandwidth as bytes/sec (delta / 10s interval)
 		if onlineSet[ct.Email] {
