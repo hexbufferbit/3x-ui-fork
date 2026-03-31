@@ -321,6 +321,9 @@ func (s *Server) startTask() {
 	// check client ips from log file every 10 sec
 	s.cron.AddJob("@every 10s", job.NewCheckClientIpJob())
 
+	// auto-delete statistics on the configured interval
+	s.cron.AddJob("@every 1h", job.NewStatisticsCleanupJob())
+
 	// check client ips from log file every day
 	s.cron.AddJob("@daily", job.NewClearLogsJob())
 

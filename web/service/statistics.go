@@ -137,8 +137,17 @@ func (s *StatisticsService) GetAllStats(onlineClients []string, clientTrafficDel
 	return results, nil
 }
 
-// DeleteAllStats hard-deletes all uptime statistics records.
+// DeleteAllStats hard-deletes uptime/IP statistics and clears related logs.
 func (s *StatisticsService) DeleteAllStats() error {
+	return s.deleteStatisticsData(true)
+}
+
+// DeleteTrackedStats removes uptime/IP statistics and the access-log state tied to IP tracking.
+func (s *StatisticsService) DeleteTrackedStats() error {
+	return s.deleteStatisticsData(false)
+}
+
+func (s *StatisticsService) deleteStatisticsData(clearErrorLog bool) error {
 	db := database.GetDB()
 	tx := db.Begin()
 	if err := tx.Where("1 = 1").Delete(&model.ClientUptimeStat{}).Error; err != nil {
@@ -153,12 +162,16 @@ func (s *StatisticsService) DeleteAllStats() error {
 		return err
 	}
 
-	return errors.Join(
-		clearConfiguredLogFile(xray.GetAccessLogPath),
-		clearConfiguredLogFile(xray.GetErrorLogPath),
-		truncateFileIfExists(xray.GetAccessPersistentLogPath()),
-		truncateFileIfExists(xray.GetAccessPersistentPrevLogPath()),
-	)
+	clearOps := []error{
+		clearConfiguredLogFile(xray.GetAccessLogPath, removeFileIfExists),
+		removeFileIfExists(xray.GetAccessPersistentLogPath()),
+		removeFileIfExists(xray.GetAccessPersistentPrevLogPath()),
+	}
+	if clearErrorLog {
+		clearOps = append(clearOps, clearConfiguredLogFile(xray.GetErrorLogPath, truncateFileIfExists))
+	}
+
+	return errors.Join(clearOps...)
 }
 
 // GetUptimeStats returns only uptime data for all clients (for bot/lightweight queries).
@@ -172,12 +185,15 @@ func (s *StatisticsService) GetUptimeStats() ([]model.ClientUptimeStat, error) {
 	return stats, nil
 }
 
-func clearConfiguredLogFile(getPath func() (string, error)) error {
+func clearConfiguredLogFile(getPath func() (string, error), clear func(string) error) error {
 	path, err := getPath()
 	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
 		return err
 	}
-	return truncateFileIfExists(path)
+	return clear(path)
 }
 
 func truncateFileIfExists(path string) error {
@@ -198,4 +214,24 @@ func truncateFileIfExists(path string) error {
 	}
 
 	return os.Truncate(path, 0)
+}
+
+func removeFileIfExists(path string) error {
+	path = strings.TrimSpace(path)
+	if path == "" || strings.EqualFold(path, "none") {
+		return nil
+	}
+
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s is a directory", path)
+	}
+
+	return os.Remove(path)
 }

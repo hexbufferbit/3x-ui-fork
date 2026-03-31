@@ -81,6 +81,8 @@ var defaultValueMap = map[string]string{
 	"externalTrafficInformEnable": "false",
 	"externalTrafficInformURI":    "",
 	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
+	"statisticsAutoDeleteHours":   "0",
+	"statisticsAutoDeleteLastRun": "0",
 
 	// Usage warning defaults
 	"usageWarningEnable":           "false",
@@ -279,6 +281,18 @@ func (s *SettingService) getInt(key string) (int, error) {
 
 func (s *SettingService) setInt(key string, value int) error {
 	return s.setString(key, strconv.Itoa(value))
+}
+
+func (s *SettingService) getInt64(key string) (int64, error) {
+	str, err := s.getString(key)
+	if err != nil {
+		return 0, err
+	}
+	return strconv.ParseInt(str, 10, 64)
+}
+
+func (s *SettingService) setInt64(key string, value int64) error {
+	return s.setString(key, strconv.FormatInt(value, 10))
 }
 
 func (s *SettingService) GetXrayConfigTemplate() (string, error) {
@@ -616,6 +630,22 @@ func (s *SettingService) GetIpLimitEnable() (bool, error) {
 		return false, err
 	}
 	return (accessLogPath != "none" && accessLogPath != ""), nil
+}
+
+func (s *SettingService) GetStatisticsAutoDeleteHours() (int, error) {
+	return s.getInt("statisticsAutoDeleteHours")
+}
+
+func (s *SettingService) SetStatisticsAutoDeleteHours(value int) error {
+	return s.setInt("statisticsAutoDeleteHours", value)
+}
+
+func (s *SettingService) GetStatisticsAutoDeleteLastRun() (int64, error) {
+	return s.getInt64("statisticsAutoDeleteLastRun")
+}
+
+func (s *SettingService) SetStatisticsAutoDeleteLastRun(value int64) error {
+	return s.setInt64("statisticsAutoDeleteLastRun", value)
 }
 
 // GetLdapEnable returns whether LDAP is enabled.

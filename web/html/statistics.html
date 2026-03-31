@@ -159,6 +159,27 @@
                                                 allow-clear />
                                         </a-col>
                                         <a-col>
+                                            <div style="display: flex; align-items: center; gap: 8px;">
+                                                <a-select v-model="statsAutoDeleteHours" style="width: 180px;">
+                                                    <a-select-option
+                                                        v-for="option in statsAutoDeleteOptions"
+                                                        :key="option.value"
+                                                        :value="option.value">
+                                                        [[ option.label ]]
+                                                    </a-select-option>
+                                                </a-select>
+                                                <a-button
+                                                    icon="clock-circle"
+                                                    :loading="statsAutoDeleteSaving"
+                                                    @click="saveAutoDeleteConfig">
+                                                    Set Auto Delete
+                                                </a-button>
+                                            </div>
+                                            <div v-if="statsAutoDeleteLastRun > 0" style="font-size: 12px; color: #999; margin-top: 4px;">
+                                                Last auto delete [[ moment(statsAutoDeleteLastRun).fromNow() ]]
+                                            </div>
+                                        </a-col>
+                                        <a-col>
                                             <a-button type="primary" icon="reload" @click="fetchStats">
                                                 {{ i18n "pages.statistics.refresh" }}
                                             </a-button>
@@ -430,6 +451,16 @@
             searchText: '',
             ipInfoCache: {},
             ipInfoLoading: {},
+            statsAutoDeleteHours: 0,
+            statsAutoDeleteLastRun: 0,
+            statsAutoDeleteSaving: false,
+            statsAutoDeleteOptions: [
+                { value: 0, label: 'Auto Delete Off' },
+                { value: 24, label: 'Daily (1 day)' },
+                { value: 48, label: 'Every 2 days' },
+                { value: 72, label: 'Every 3 days' },
+                { value: 168, label: 'Weekly (7 days)' },
+            ],
             stats: [],
             refreshIntervalId: null,
             trafficListener: null,
@@ -613,6 +644,40 @@
                     this.$delete(this.ipInfoLoading, ip);
                 }
             },
+            async fetchAutoDeleteConfig() {
+                try {
+                    const res = await axios.get('panel/api/statistics/autoDeleteConfig');
+                    if (res.data.success) {
+                        const obj = res.data.obj || {};
+                        this.statsAutoDeleteHours = Number(obj.hours) || 0;
+                        this.statsAutoDeleteLastRun = Number(obj.lastRun) || 0;
+                    } else {
+                        this.$message.error(res.data.msg || 'Failed to load auto delete settings');
+                    }
+                } catch (e) {
+                    this.$message.error('Failed to load auto delete settings');
+                }
+            },
+            async saveAutoDeleteConfig() {
+                this.statsAutoDeleteSaving = true;
+                try {
+                    const res = await axios.post('panel/api/statistics/autoDeleteConfig', {
+                        hours: this.statsAutoDeleteHours,
+                    });
+                    if (res.data.success) {
+                        const obj = res.data.obj || {};
+                        this.statsAutoDeleteHours = Number(obj.hours) || 0;
+                        this.statsAutoDeleteLastRun = Number(obj.lastRun) || 0;
+                        this.$message.success('Auto delete settings saved');
+                    } else {
+                        this.$message.error(res.data.msg || 'Failed to save auto delete settings');
+                    }
+                } catch (e) {
+                    this.$message.error('Failed to save auto delete settings');
+                } finally {
+                    this.statsAutoDeleteSaving = false;
+                }
+            },
             onIpPopoverVisibleChange(ip, visible) {
                 if (visible) {
                     this.loadIpInfo(ip);
@@ -699,7 +764,10 @@
             },
         },
         async mounted() {
-            await this.fetchStats();
+            await Promise.all([
+                this.fetchStats(),
+                this.fetchAutoDeleteConfig(),
+            ]);
             this.startLiveUpdates();
         },
         beforeDestroy() {
