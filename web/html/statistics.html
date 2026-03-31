@@ -347,6 +347,57 @@
                                                             [[ sizeFormat(record.currentBwUp + record.currentBwDown) ]]/s
                                                         </span>
                                                     </template>
+                                                    <template slot="onlineIps" slot-scope="text, record">
+                                                        <template v-if="record.ips && record.ips.length > 0">
+                                                            <a-popover
+                                                                v-for="ipEntry in record.ips"
+                                                                :key="ipEntry.ip"
+                                                                trigger="hover"
+                                                                placement="topLeft"
+                                                                @visibleChange="onIpPopoverVisibleChange(ipEntry.ip, $event)">
+                                                                <template slot="content">
+                                                                    <div class="ip-popover">
+                                                                        <div class="ip-popover-row">
+                                                                            <strong>IP</strong>
+                                                                            <span>[[ ipEntry.ip ]]</span>
+                                                                        </div>
+                                                                        <div class="ip-popover-row">
+                                                                            <strong>Last seen</strong>
+                                                                            <span>[[ formatIpLastSeen(ipEntry.lastSeen) ]]</span>
+                                                                        </div>
+                                                                        <template v-if="ipInfoLoading[ipEntry.ip]">
+                                                                            <a-spin size="small"></a-spin>
+                                                                        </template>
+                                                                        <template v-else>
+                                                                            <div v-if="ipInfo(ipEntry.ip).message" class="ip-popover-note">
+                                                                                [[ ipInfo(ipEntry.ip).message ]]
+                                                                            </div>
+                                                                            <template v-else>
+                                                                                <div class="ip-popover-row">
+                                                                                    <strong>ISP</strong>
+                                                                                    <span>[[ ipInfo(ipEntry.ip).isp || '-' ]]</span>
+                                                                                </div>
+                                                                                <div class="ip-popover-row">
+                                                                                    <strong>Org</strong>
+                                                                                    <span>[[ ipInfo(ipEntry.ip).organization || '-' ]]</span>
+                                                                                </div>
+                                                                                <div class="ip-popover-row">
+                                                                                    <strong>Location</strong>
+                                                                                    <span>[[ formatIpLocation(ipInfo(ipEntry.ip)) || '-' ]]</span>
+                                                                                </div>
+                                                                                <div class="ip-popover-row">
+                                                                                    <strong>Timezone</strong>
+                                                                                    <span>[[ ipInfo(ipEntry.ip).timezone || '-' ]]</span>
+                                                                                </div>
+                                                                            </template>
+                                                                        </template>
+                                                                    </div>
+                                                                </template>
+                                                                <a-tag class="ip-tag">[[ ipEntry.ip ]]</a-tag>
+                                                            </a-popover>
+                                                        </template>
+                                                        <span v-else style="color: #999;">-</span>
+                                                    </template>
                                                 </a-table>
                                             </div>
                                         </a-tab-pane>
@@ -436,6 +487,12 @@
                     width: 150,
                     scopedSlots: { customRender: 'bwTotal' },
                     sorter: (a, b) => (a.currentBwUp + a.currentBwDown) - (b.currentBwUp + b.currentBwDown),
+                },
+                {
+                    title: '{{ i18n "pages.statistics.colIPs" }}',
+                    key: 'onlineIps',
+                    width: 220,
+                    scopedSlots: { customRender: 'onlineIps' },
                 },
             ],
         },
