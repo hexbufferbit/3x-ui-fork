@@ -818,13 +818,15 @@ install_x-ui() {
         rm ${xui_folder}/ -rf
     fi
     
-    # Extract resources and set permissions
-    tar zxvf x-ui-linux-$(arch).tar.gz
-    rm x-ui-linux-$(arch).tar.gz -f
+    # Extract directly into parent of xui_folder so x-ui/ lands at the right path
+    local xui_parent
+    xui_parent=$(dirname "${xui_folder}")
+    mkdir -p "${xui_parent}"
+    tar zxvf ${xui_folder}-linux-$(arch).tar.gz -C "${xui_parent}"
+    rm -f ${xui_folder}-linux-$(arch).tar.gz
     
-    cd x-ui
+    cd ${xui_folder}
     chmod +x x-ui
-    chmod +x x-ui.sh
     
     # Check the system's architecture and rename the file accordingly
     if [[ $(arch) == "armv5" || $(arch) == "armv6" || $(arch) == "armv7" ]]; then
@@ -833,18 +835,12 @@ install_x-ui() {
     fi
     chmod +x x-ui bin/xray-linux-$(arch)
     
-    # Install to target folder
-    cd ..
-    cp -rf x-ui/. ${xui_folder}/
-    rm -rf x-ui/
-    cd ${xui_folder}
-    
     # Restore database backup if it exists
     if [[ -f /tmp/x-ui-db-backup.db ]]; then
         mv -f /tmp/x-ui-db-backup.db ${xui_folder}/x-ui.db
     fi
     
-    # Update x-ui cli and se set permission
+    # Update x-ui cli and set permission
     mv -f /usr/bin/x-ui-temp /usr/bin/x-ui
     chmod +x /usr/bin/x-ui
     mkdir -p /var/log/x-ui
