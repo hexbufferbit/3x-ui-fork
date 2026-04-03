@@ -12,6 +12,7 @@ tmp/
 *.tar.gz
 
 # Ignore build and distribution directories
+.release/
 backup/
 bin/
 dist/
