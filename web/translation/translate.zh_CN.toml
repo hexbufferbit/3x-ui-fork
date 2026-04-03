@@ -656,6 +656,13 @@
 "helpDesc" = "机器人帮助"
 "statusDesc" = "检查机器人状态"
 "idDesc" = "显示您的 Telegram ID"
+"statsDesc" = "显示客户端在线时间统计"
+"clearStatsDesc" = "删除所有在线时间统计"
+"statsHeader" = "📊 <b>客户端在线时间统计：</b>"
+"statsEmpty" = "📊 暂无在线时间统计记录。"
+"statsFailed" = "❗ 获取统计失败。\r\n\r\n<code>错误：{{ .Error }}</code>."
+"clearStatsSuccess" = "✅ 所有在线时间统计已删除。"
+"clearStatsFailed" = "❗ 删除统计失败。\r\n\r\n<code>错误：{{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 CPU 使用率为 {{ .Percent }}%，超过阈值 {{ .Threshold }}%"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 评论"
 "ResetAllTraffics" = "重置所有流量"
 "SortedTrafficUsageReport" = "排序的流量使用报告"
+"uptimeStats" = "📊 在线统计"
+"clearStats" = "🗑 清除统计"
 
 [tgbot.answers]
 "successfulOperation" = "✅ 成功！"

@@ -656,6 +656,13 @@
 "helpDesc" = "مساعدة البوت"
 "statusDesc" = "التحقق من حالة البوت"
 "idDesc" = "عرض معرف Telegram الخاص بك"
+"statsDesc" = "عرض إحصائيات وقت تشغيل العميل"
+"clearStatsDesc" = "حذف جميع إحصائيات وقت التشغيل"
+"statsHeader" = "📊 <b>إحصائيات وقت تشغيل العميل:</b>"
+"statsEmpty" = "📊 لم يتم تسجيل إحصائيات وقت التشغيل بعد."
+"statsFailed" = "❗ فشل في الحصول على الإحصائيات.\r\n\r\n<code>خطأ: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ تم حذف جميع إحصائيات وقت التشغيل."
+"clearStatsFailed" = "❗ فشل في حذف الإحصائيات.\r\n\r\n<code>خطأ: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 حمل المعالج {{ .Percent }}% عدى الحد المسموح ({{ .Threshold }}%)"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 تعليق"
 "ResetAllTraffics" = "إعادة ضبط جميع الترافيك"
 "SortedTrafficUsageReport" = "تقرير استخدام الترافيك المرتب"
+"uptimeStats" = "📊 إحصائيات وقت التشغيل"
+"clearStats" = "🗑 مسح الإحصائيات"
 
 [tgbot.answers]
 "successfulOperation" = "✅ العملية نجحت!"

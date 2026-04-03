@@ -656,6 +656,13 @@
 "helpDesc" = "Довідка по боту"
 "statusDesc" = "Перевірити статус бота"
 "idDesc" = "Показати ваш Telegram ID"
+"statsDesc" = "Показати статистику аптайму клієнтів"
+"clearStatsDesc" = "Видалити всю статистику аптайму"
+"statsHeader" = "📊 <b>Статистика аптайму клієнтів:</b>"
+"statsEmpty" = "📊 Статистика аптайму ще не записана."
+"statsFailed" = "❗ Не вдалося отримати статистику.\r\n\r\n<code>Помилка: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ Всю статистику аптайму видалено."
+"clearStatsFailed" = "❗ Не вдалося видалити статистику.\r\n\r\n<code>Помилка: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 Навантаження ЦП  {{ .Percent }}% перевищує порогове значення {{ .Threshold }}%"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 Коментар"
 "ResetAllTraffics" = "Скинути весь трафік"
 "SortedTrafficUsageReport" = "Відсортований звіт про використання трафіку"
+"uptimeStats" = "📊 Статистика аптайму"
+"clearStats" = "🗑 Очистити статистику"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Операція успішна!"

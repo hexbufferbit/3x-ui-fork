@@ -672,6 +672,13 @@
 "helpDesc" = "راهنمای ربات"
 "statusDesc" = "بررسی وضعیت ربات"
 "idDesc" = "نمایش شناسه تلگرام شما"
+"statsDesc" = "نمایش آمار زمان فعالیت کلاینت"
+"clearStatsDesc" = "حذف تمام آمار زمان فعالیت"
+"statsHeader" = "📊 <b>آمار زمان فعالیت کلاینت:</b>"
+"statsEmpty" = "📊 هنوز آماری برای زمان فعالیت ثبت نشده است."
+"statsFailed" = "❗ دریافت آمار با شکست مواجه شد.\r\n\r\n<code>خطا: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ تمام آمار زمان فعالیت حذف شدند."
+"clearStatsFailed" = "❗ حذف آمار با شکست مواجه شد.\r\n\r\n<code>خطا: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 بار ‌پردازنده {{ .Percent }}% بیشتر از آستانه است {{ .Threshold }}%"
@@ -787,6 +794,8 @@
 "change_comment" = "⚙️💬 نظر"
 "ResetAllTraffics" = "بازنشانی همه ترافیک‌ها"
 "SortedTrafficUsageReport" = "گزارش استفاده از ترافیک مرتب‌شده"
+"uptimeStats" = "📊 آمار فعالیت"
+"clearStats" = "🗑 پاک‌سازی آمار"
 
 [tgbot.answers]
 "successfulOperation" = "✅ انجام شد!"

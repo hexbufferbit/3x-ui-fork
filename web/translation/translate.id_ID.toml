@@ -656,6 +656,13 @@
 "helpDesc" = "Bantuan bot"
 "statusDesc" = "Periksa status bot"
 "idDesc" = "Tampilkan ID Telegram Anda"
+"statsDesc" = "Tampilkan statistik uptime klien"
+"clearStatsDesc" = "Hapus semua statistik uptime"
+"statsHeader" = "📊 <b>Statistik Uptime Klien:</b>"
+"statsEmpty" = "📊 Belum ada statistik uptime yang tercatat."
+"statsFailed" = "❗ Gagal mendapatkan statistik.\r\n\r\n<code>Error: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ Semua statistik uptime telah dihapus."
+"clearStatsFailed" = "❗ Gagal menghapus statistik.\r\n\r\n<code>Error: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 Beban CPU {{ .Percent }}% melebihi batas {{ .Threshold }}%"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 Komentar"
 "ResetAllTraffics" = "Reset Semua Lalu Lintas"
 "SortedTrafficUsageReport" = "Laporan Penggunaan Lalu Lintas yang Terurut"
+"uptimeStats" = "📊 Statistik Uptime"
+"clearStats" = "🗑 Hapus Statistik"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Operasi berhasil!"

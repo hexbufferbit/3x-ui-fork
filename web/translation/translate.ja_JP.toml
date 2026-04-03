@@ -656,6 +656,13 @@
 "helpDesc" = "ボットのヘルプ"
 "statusDesc" = "ボットの状態を確認"
 "idDesc" = "Telegram IDを表示"
+"statsDesc" = "クライアントの稼働時間統計を表示"
+"clearStatsDesc" = "すべての稼働時間統計を削除"
+"statsHeader" = "📊 <b>クライアント稼働時間統計：</b>"
+"statsEmpty" = "📊 稼働時間の統計はまだ記録されていません。"
+"statsFailed" = "❗ 統計の取得に失敗しました。\r\n\r\n<code>エラー: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ すべての稼働時間統計が削除されました。"
+"clearStatsFailed" = "❗ 統計の削除に失敗しました。\r\n\r\n<code>エラー: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 CPU使用率は{{ .Percent }}%、しきい値{{ .Threshold }}%を超えました"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 コメント"
 "ResetAllTraffics" = "すべてのトラフィックをリセット"
 "SortedTrafficUsageReport" = "ソートされたトラフィック使用レポート"
+"uptimeStats" = "📊 稼働統計"
+"clearStats" = "🗑 統計を消去"
 
 [tgbot.answers]
 "successfulOperation" = "✅ 成功！"

@@ -656,6 +656,13 @@
 "helpDesc" = "Ayuda del bot"
 "statusDesc" = "Comprobar el estado del bot"
 "idDesc" = "Mostrar tu ID de Telegram"
+"statsDesc" = "Mostrar estadísticas de tiempo de actividad del cliente"
+"clearStatsDesc" = "Eliminar todas las estadísticas de tiempo de actividad"
+"statsHeader" = "📊 <b>Estadísticas de tiempo de actividad del cliente:</b>"
+"statsEmpty" = "📊 Aún no se han registrado estadísticas de tiempo de actividad."
+"statsFailed" = "❗ Error al obtener las estadísticas.\r\n\r\n<code>Error: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ Todas las estadísticas de tiempo de actividad eliminadas."
+"clearStatsFailed" = "❗ Error al eliminar las estadísticas.\r\n\r\n<code>Error: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 El uso de CPU {{ .Percent }}% es mayor que el umbral {{ .Threshold }}%"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 Comentario"
 "ResetAllTraffics" = "Reiniciar todo el tráfico"
 "SortedTrafficUsageReport" = "Informe de uso de tráfico ordenado"
+"uptimeStats" = "📊 Estadísticas de actividad"
+"clearStats" = "🗑 Borrar estadísticas"
 
 [tgbot.answers]
 "successfulOperation" = "✅ ¡Exitosa!"

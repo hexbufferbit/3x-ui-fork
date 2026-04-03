@@ -656,6 +656,13 @@
 "helpDesc" = "Trợ giúp bot"
 "statusDesc" = "Kiểm tra trạng thái bot"
 "idDesc" = "Hiển thị ID Telegram của bạn"
+"statsDesc" = "Hiển thị thống kê thời gian hoạt động của khách hàng"
+"clearStatsDesc" = "Xóa tất cả thống kê thời gian hoạt động"
+"statsHeader" = "📊 <b>Thống kê thời gian hoạt động của khách hàng:</b>"
+"statsEmpty" = "📊 Chưa có thống kê thời gian hoạt động nào được ghi nhận."
+"statsFailed" = "❗ Không thể lấy thống kê.\r\n\r\n<code>Lỗi: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ Tất cả thống kê thời gian hoạt động đã bị xóa."
+"clearStatsFailed" = "❗ Không thể xóa thống kê.\r\n\r\n<code>Lỗi: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 Sử dụng CPU {{ .Percent }}% vượt quá ngưỡng {{ .Threshold }}%"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 Bình Luận"
 "ResetAllTraffics" = "Đặt lại tất cả lưu lượng"
 "SortedTrafficUsageReport" = "Báo cáo sử dụng lưu lượng đã sắp xếp"
+"uptimeStats" = "📊 Thống kê hoạt động"
+"clearStats" = "🗑 Xóa thống kê"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Thành công!"

@@ -656,6 +656,13 @@
 "helpDesc" = "Bot yardımı"
 "statusDesc" = "Bot durumunu kontrol et"
 "idDesc" = "Telegram ID'nizi göster"
+"statsDesc" = "İstemci çalışma süresi istatistiklerini göster"
+"clearStatsDesc" = "Tüm çalışma süresi istatistiklerini sil"
+"statsHeader" = "📊 <b>İstemci Çalışma Süresi İstatistikleri:</b>"
+"statsEmpty" = "📊 Henüz çalışma süresi istatistiği kaydedilmedi."
+"statsFailed" = "❗ İstatistikler alınamadı.\r\n\r\n<code>Hata: {{ .Error }}</code>."
+"clearStatsSuccess" = "✅ Tüm çalışma süresi istatistikleri silindi."
+"clearStatsFailed" = "❗ İstatistikler silinemedi.\r\n\r\n<code>Hata: {{ .Error }}</code>."
 
 [tgbot.messages]
 "cpuThreshold" = "🔴 CPU Yükü {{ .Percent }}% eşiği {{ .Threshold }}%'yi aşıyor"
@@ -767,6 +774,8 @@
 "change_comment" = "⚙️💬 Yorum"
 "ResetAllTraffics" = "Tüm Trafikleri Sıfırla"
 "SortedTrafficUsageReport" = "Sıralı Trafik Kullanım Raporu"
+"uptimeStats" = "📊 Çalışma Süresi İstatistikleri"
+"clearStats" = "🗑 İstatistikleri Temizle"
 
 [tgbot.answers]
 "successfulOperation" = "✅ İşlem başarılı!"
