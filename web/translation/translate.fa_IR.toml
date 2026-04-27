@@ -796,6 +796,7 @@
 "SortedTrafficUsageReport" = "گزارش استفاده از ترافیک مرتب‌شده"
 "uptimeStats" = "📊 آمار فعالیت"
 "clearStats" = "🗑 پاک‌سازی آمار"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ انجام شد!"

@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "Laporan Penggunaan Lalu Lintas yang Terurut"
 "uptimeStats" = "📊 Statistik Uptime"
 "clearStats" = "🗑 Hapus Statistik"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Operasi berhasil!"

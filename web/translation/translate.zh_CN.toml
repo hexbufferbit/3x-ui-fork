@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "排序的流量使用报告"
 "uptimeStats" = "📊 在线统计"
 "clearStats" = "🗑 清除统计"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ 成功！"

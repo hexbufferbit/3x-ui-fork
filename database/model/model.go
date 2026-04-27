@@ -53,6 +53,10 @@ type Inbound struct {
 	StreamSettings string   `json:"streamSettings" form:"streamSettings"`
 	Tag            string   `json:"tag" form:"tag" gorm:"unique"`
 	Sniffing       string   `json:"sniffing" form:"sniffing"`
+
+	// SecondaryConfig stores a per-inbound URI template (e.g., vless://UUID@host...)
+	// served via the Telegram bot with the requesting client's UID substituted in.
+	SecondaryConfig string `json:"secondaryConfig" form:"secondaryConfig" gorm:"default:''"`
 }
 
 // OutboundTraffics tracks traffic statistics for Xray outbound connections.

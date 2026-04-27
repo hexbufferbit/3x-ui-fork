@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "Відсортований звіт про використання трафіку"
 "uptimeStats" = "📊 Статистика аптайму"
 "clearStats" = "🗑 Очистити статистику"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Операція успішна!"

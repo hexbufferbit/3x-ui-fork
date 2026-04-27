@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "Báo cáo sử dụng lưu lượng đã sắp xếp"
 "uptimeStats" = "📊 Thống kê hoạt động"
 "clearStats" = "🗑 Xóa thống kê"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Thành công!"

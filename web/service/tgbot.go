@@ -897,6 +897,20 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 				}
 				inbound, _ := t.inboundService.GetInbound(inboundIdInt)
 				t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.chooseClient", "Inbound=="+inbound.Remark), clientsKB)
+			case "get_clients_for_secondary_config":
+				inboundId := dataArray[1]
+				inboundIdInt, err := strconv.Atoi(inboundId)
+				if err != nil {
+					t.sendCallbackAnswerTgBot(callbackQuery.ID, err.Error())
+					return
+				}
+				clientsKB, err := t.getInboundClientsFor(inboundIdInt, "client_secondary_config")
+				if err != nil {
+					t.sendCallbackAnswerTgBot(callbackQuery.ID, err.Error())
+					return
+				}
+				inbound, _ := t.inboundService.GetInbound(inboundIdInt)
+				t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.chooseClient", "Inbound=="+inbound.Remark), clientsKB)
 			case "client_sub_links":
 				t.sendClientSubLinks(chatId, email)
 				return
@@ -905,6 +919,9 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 				return
 			case "client_qr_links":
 				t.sendClientQRLinks(chatId, email)
+				return
+			case "client_secondary_config":
+				t.sendClientSecondaryConfig(chatId, email)
 				return
 			case "client_get_usage":
 				t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.messages.email", "Email=="+email))
@@ -1706,6 +1723,13 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 					return
 				}
 				t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.chooseInbound"), inbounds)
+			case "admin_client_secondary_config":
+				inbounds, err := t.getInboundsFor("get_clients_for_secondary_config")
+				if err != nil {
+					t.sendCallbackAnswerTgBot(callbackQuery.ID, err.Error())
+					return
+				}
+				t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.chooseInbound"), inbounds)
 			}
 
 		}
@@ -1804,6 +1828,28 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 		}
 		keyboard3 := tu.InlineKeyboardGrid(tu.InlineKeyboardCols(cols3, buttons3...))
 		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.pleaseChoose"), keyboard3)
+	case "client_secondary_config":
+		// show user's clients to choose for secondary config
+		tgUserID := callbackQuery.From.ID
+		traffics, err := t.inboundService.GetClientTrafficTgBot(tgUserID)
+		if err != nil {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+err.Error())
+			return
+		}
+		if len(traffics) == 0 {
+			t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.askToAddUserId", "TgUserID=="+strconv.FormatInt(tgUserID, 10)))
+			return
+		}
+		var buttonsSC []telego.InlineKeyboardButton
+		for _, tr := range traffics {
+			buttonsSC = append(buttonsSC, tu.InlineKeyboardButton(tr.Email).WithCallbackData(t.encodeQuery("client_secondary_config "+tr.Email)))
+		}
+		colsSC := 1
+		if len(buttonsSC) >= 6 {
+			colsSC = 2
+		}
+		keyboardSC := tu.InlineKeyboardGrid(tu.InlineKeyboardCols(colsSC, buttonsSC...))
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.commands.pleaseChoose"), keyboardSC)
 	case "onlines":
 		t.sendCallbackAnswerTgBot(callbackQuery.ID, t.I18nBot("tgbot.buttons.onlines"))
 		t.onlineClients(chatId)
@@ -2157,6 +2203,11 @@ func (t *Tgbot) answerCallback(callbackQuery *telego.CallbackQuery, isAdmin bool
 			t.sendClientQRLinks(chatId, email)
 			return
 		}
+		if after, ok := strings.CutPrefix(callbackQuery.Data, "client_secondary_config "); ok {
+			email := after
+			t.sendClientSecondaryConfig(chatId, email)
+			return
+		}
 	}
 }
 
@@ -2354,6 +2405,9 @@ func (t *Tgbot) SendAnswer(chatId int64, msg string, isAdmin bool) {
 			tu.InlineKeyboardButton(t.I18nBot("qrCode")).WithCallbackData(t.encodeQuery("admin_client_qr_links")),
 		),
 		tu.InlineKeyboardRow(
+			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.secondaryConfig")).WithCallbackData(t.encodeQuery("admin_client_secondary_config")),
+		),
+		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.uptimeStats")).WithCallbackData(t.encodeQuery("get_uptime_stats")),
 			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.clearStats")).WithCallbackData(t.encodeQuery("clear_uptime_stats")),
 		),
@@ -2369,6 +2423,7 @@ func (t *Tgbot) SendAnswer(chatId int64, msg string, isAdmin bool) {
 		),
 		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton(t.I18nBot("qrCode")).WithCallbackData(t.encodeQuery("client_qr_links")),
+			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.secondaryConfig")).WithCallbackData(t.encodeQuery("client_secondary_config")),
 		),
 	)
 
@@ -2569,6 +2624,104 @@ func (t *Tgbot) sendClientSubLinks(chatId int64, email string) {
 		),
 	)
 	t.SendMsgToTgbot(chatId, msg, inlineKeyboard)
+}
+
+// secondaryConfigUIDPattern matches "scheme://UID@" so we can replace the UID
+// without touching the rest of the URI (host, port, query, fragment).
+var secondaryConfigUIDPattern = regexp.MustCompile(`^([a-zA-Z][a-zA-Z0-9+.\-]*://)([^@/?#\s]+)(@)`)
+
+// applySecondaryConfigUID returns the inbound's secondary config template with the
+// UID portion (between scheme:// and @) replaced by the supplied UID.
+// Lines without a recognizable scheme://UID@ prefix are returned unchanged.
+func applySecondaryConfigUID(template, uid string) string {
+	if template == "" || uid == "" {
+		return template
+	}
+	lines := strings.Split(strings.ReplaceAll(template, "\r\n", "\n"), "\n")
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		lines[i] = secondaryConfigUIDPattern.ReplaceAllString(trimmed, "${1}"+uid+"${3}")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// sendClientSecondaryConfig builds the inbound's secondary config with the
+// client's UID injected and sends it to the chat (text + QR for each line).
+func (t *Tgbot) sendClientSecondaryConfig(chatId int64, email string) {
+	_, inbound, err := t.inboundService.GetClientInboundByEmail(email)
+	if err != nil || inbound == nil {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\n"+t.I18nBot("tgbot.noResult"))
+		return
+	}
+	if strings.TrimSpace(inbound.SecondaryConfig) == "" {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.noResult"))
+		return
+	}
+	_, client, err := t.inboundService.GetClientByEmail(email)
+	if err != nil || client == nil {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\nclient not found")
+		return
+	}
+
+	uid := client.ID
+	if uid == "" {
+		// trojan/shadowsocks fallbacks: prefer password, then email
+		switch inbound.Protocol {
+		case model.Trojan:
+			uid = client.Password
+		case model.Shadowsocks:
+			uid = client.Email
+		}
+	}
+	if uid == "" {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.answers.errorOperation")+"\r\nempty client UID")
+		return
+	}
+
+	rendered := applySecondaryConfigUID(inbound.SecondaryConfig, uid)
+
+	// Split into individual non-empty links for cleaner display
+	rawLines := strings.Split(strings.ReplaceAll(rendered, "\r\n", "\n"), "\n")
+	var links []string
+	for _, l := range rawLines {
+		l = strings.TrimSpace(l)
+		if l != "" {
+			links = append(links, l)
+		}
+	}
+	if len(links) == 0 {
+		t.SendMsgToTgbot(chatId, t.I18nBot("tgbot.noResult"))
+		return
+	}
+
+	msg := t.I18nBot("tgbot.buttons.secondaryConfig") + ":\r\n"
+	for _, l := range links {
+		msg += "<code>" + html.EscapeString(l) + "</code>\r\n"
+	}
+	t.SendMsgToTgbot(chatId, msg)
+
+	// Send QR code per link (cap at 5 to mirror sendClientQRLinks)
+	qrMax := len(links)
+	if qrMax > 5 {
+		qrMax = 5
+	}
+	for i := 0; i < qrMax; i++ {
+		png, qrErr := qrcode.Encode(links[i], qrcode.Medium, 320)
+		if qrErr != nil {
+			continue
+		}
+		document := tu.Document(
+			tu.ID(chatId),
+			tu.FileFromBytes(png, fmt.Sprintf("secondary-%d.png", i+1)),
+		)
+		_, _ = bot.SendDocument(context.Background(), document)
+		if i < qrMax-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 }
 
 // sendClientIndividualLinks fetches the subscription content (individual links) and sends it to the user

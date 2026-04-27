@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "Relatório de Uso de Tráfego Ordenado"
 "uptimeStats" = "📊 Estatísticas de Atividade"
 "clearStats" = "🗑 Limpar Estatísticas"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Operação bem-sucedida!"

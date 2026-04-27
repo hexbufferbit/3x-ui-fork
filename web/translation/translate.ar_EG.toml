@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "تقرير استخدام الترافيك المرتب"
 "uptimeStats" = "📊 إحصائيات وقت التشغيل"
 "clearStats" = "🗑 مسح الإحصائيات"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ العملية نجحت!"

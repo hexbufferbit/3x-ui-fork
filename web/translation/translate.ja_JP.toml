@@ -776,6 +776,7 @@
 "SortedTrafficUsageReport" = "ソートされたトラフィック使用レポート"
 "uptimeStats" = "📊 稼働統計"
 "clearStats" = "🗑 統計を消去"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ 成功！"

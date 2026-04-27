@@ -848,6 +848,7 @@
 "SortedTrafficUsageReport" = "Sorted Traffic Usage Report"
 "uptimeStats" = "📊 Uptime Stats"
 "clearStats" = "🗑 Clear Stats"
+"secondaryConfig" = "🛡️ Secondary Config"
 
 [tgbot.answers]
 "successfulOperation" = "✅ Operation successful!"

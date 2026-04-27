@@ -21,6 +21,7 @@ class DBInbound {
         this.tag = "";
         this.sniffing = "";
         this.clientStats = ""
+        this.secondaryConfig = "";
         if (data == null) {
             return;
         }
