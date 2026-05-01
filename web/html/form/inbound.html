@@ -183,8 +183,9 @@
                 <a-icon type="question-circle"></a-icon>
             </a-tooltip>
         </template>
-        <a-input type="textarea" :rows="6" v-model="dbInbound.secondaryConfig"
-            placeholder="One URI per line. Example: vless://UUID@host:port?...#name"></a-input>
+        <a-textarea v-model.trim="dbInbound.secondaryConfig"
+            :auto-size="{ minRows: 4, maxRows: 12 }"
+            placeholder="One URI per line. Example: vless://UUID@host:port?...#name"></a-textarea>
     </a-form-item>
 </a-form>
 
