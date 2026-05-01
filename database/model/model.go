@@ -56,7 +56,8 @@ type Inbound struct {
 
 	// SecondaryConfig stores a per-inbound URI template (e.g., vless://UUID@host...)
 	// served via the Telegram bot with the requesting client's UID substituted in.
-	SecondaryConfig string `json:"secondaryConfig" form:"secondaryConfig" gorm:"default:''"`
+	// Multiple templates are supported by putting one URI per line.
+	SecondaryConfig string `json:"secondaryConfig" form:"secondaryConfig" gorm:"type:text;default:''"`
 }
 
 // OutboundTraffics tracks traffic statistics for Xray outbound connections.

@@ -2815,10 +2815,46 @@ func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
 	// Normalize line endings and trim
 	lines := strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n")
 	var cleaned []string
+	seen := map[string]struct{}{}
 	for _, l := range lines {
 		l = strings.TrimSpace(l)
 		if l != "" {
+			if _, ok := seen[l]; ok {
+				continue
+			}
+			seen[l] = struct{}{}
 			cleaned = append(cleaned, l)
+		}
+	}
+
+	// Merge inbound secondary config templates (if present) by injecting this client's UID.
+	// This makes "Individual links" return *all* configs for the selected email.
+	if _, inbound, ibErr := t.inboundService.GetClientInboundByEmail(email); ibErr == nil && inbound != nil {
+		if strings.TrimSpace(inbound.SecondaryConfig) != "" {
+			uid := client.ID
+			if uid == "" {
+				switch inbound.Protocol {
+				case model.Trojan:
+					uid = client.Password
+				case model.Shadowsocks:
+					uid = client.Email
+				}
+			}
+			if uid != "" {
+				rendered := applySecondaryConfigUID(inbound.SecondaryConfig, uid)
+				secLines := strings.Split(strings.ReplaceAll(rendered, "\r\n", "\n"), "\n")
+				for _, l := range secLines {
+					l = strings.TrimSpace(l)
+					if l == "" {
+						continue
+					}
+					if _, ok := seen[l]; ok {
+						continue
+					}
+					seen[l] = struct{}{}
+					cleaned = append(cleaned, l)
+				}
+			}
 		}
 	}
 	if len(cleaned) == 0 {
@@ -2837,7 +2873,7 @@ func (t *Tgbot) sendClientIndividualLinks(chatId int64, email string) {
 		msg := t.I18nBot("subscription.individualLinks") + ":\r\n"
 		for _, link := range chunk {
 			// wrap each link in <code>
-			msg += "<code>" + link + "</code>\r\n"
+			msg += "<code>" + html.EscapeString(link) + "</code>\r\n"
 		}
 		t.SendMsgToTgbot(chatId, msg)
 	}
