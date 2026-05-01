@@ -2405,9 +2405,6 @@ func (t *Tgbot) SendAnswer(chatId int64, msg string, isAdmin bool) {
 			tu.InlineKeyboardButton(t.I18nBot("qrCode")).WithCallbackData(t.encodeQuery("admin_client_qr_links")),
 		),
 		tu.InlineKeyboardRow(
-			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.secondaryConfig")).WithCallbackData(t.encodeQuery("admin_client_secondary_config")),
-		),
-		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.uptimeStats")).WithCallbackData(t.encodeQuery("get_uptime_stats")),
 			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.clearStats")).WithCallbackData(t.encodeQuery("clear_uptime_stats")),
 		),
@@ -2423,7 +2420,6 @@ func (t *Tgbot) SendAnswer(chatId int64, msg string, isAdmin bool) {
 		),
 		tu.InlineKeyboardRow(
 			tu.InlineKeyboardButton(t.I18nBot("qrCode")).WithCallbackData(t.encodeQuery("client_qr_links")),
-			tu.InlineKeyboardButton(t.I18nBot("tgbot.buttons.secondaryConfig")).WithCallbackData(t.encodeQuery("client_secondary_config")),
 		),
 	)
 
